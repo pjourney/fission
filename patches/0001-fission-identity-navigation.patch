@@ -1,0 +1,590 @@
+diff --git a/src/Main/MainGui.cpp b/src/Main/MainGui.cpp
+--- a/src/Main/MainGui.cpp
++++ b/src/Main/MainGui.cpp
+@@ -203,23 +203,24 @@
+ #endif
+ 
+     // Name and Version of the Application
+-    App::Application::Config()["ExeName"] = "FreeCAD";
+-    App::Application::Config()["ExeVendor"] = "FreeCAD";
++    App::Application::Config()["ExeName"] = "Fission";
++    App::Application::Config()["ExeVendor"] = "Fission";
+     App::Application::Config()["AppDataSkipVendor"] = "true";
+     App::Application::Config()["MaintainerUrl"] = "https://freecad.org";
+ 
+     // set the banner (for logging and console)
+     App::Application::Config()["CopyrightInfo"] = sBanner;
+-    App::Application::Config()["AppIcon"] = "freecad";
+-    App::Application::Config()["SplashScreen"] = "freecadsplash";
+-    App::Application::Config()["StartWorkbench"] = "PartDesignWorkbench";
++    App::Application::Config()["AppIcon"] = "fission";
++    App::Application::Config()["SplashScreen"] = "fissionsplash";
++    App::Application::Config()["StartWorkbench"] = "FissionWorkbench";
++    App::Application::Config()["NavigationStyle"] = "Gui::FissionNavigationStyle";
+     // App::Application::Config()["HiddenDockWindow"] = "Property editor";
+     App::Application::Config()["SplashAlignment"] = "Bottom|Left";
+     App::Application::Config()["SplashTextColor"] = "#418FDE";
+     App::Application::Config()["SplashWarningColor"] = "#CA333B";
+     App::Application::Config()["SplashInfoColor"] = "#212529";
+     App::Application::Config()["SplashInfoPosition"] = "6,75";
+-    App::Application::Config()["DesktopFileName"] = "org.freecad.FreeCAD";
++    App::Application::Config()["DesktopFileName"] = "org.fission.Fission";
+ 
+     try {
+         // Init phase ===========================================================
+diff --git a/src/Main/MainCmd.cpp b/src/Main/MainCmd.cpp
+--- a/src/Main/MainCmd.cpp
++++ b/src/Main/MainCmd.cpp
+@@ -69,8 +69,8 @@
+ #endif
+ 
+     // Name and Version of the Application
+-    App::Application::Config()["ExeName"] = "FreeCAD";
+-    App::Application::Config()["ExeVendor"] = "FreeCAD";
++    App::Application::Config()["ExeName"] = "Fission";
++    App::Application::Config()["ExeVendor"] = "Fission";
+     App::Application::Config()["AppDataSkipVendor"] = "true";
+ 
+     // set the banner (for logging and console)
+diff --git a/src/Main/CMakeLists.txt b/src/Main/CMakeLists.txt
+--- a/src/Main/CMakeLists.txt
++++ b/src/Main/CMakeLists.txt
+@@ -33,7 +33,7 @@
+     endif()
+     target_compile_warn_error(FreeCADMain)
+ 
+-    SET_BIN_DIR(FreeCADMain FreeCAD)
++    SET_BIN_DIR(FreeCADMain Fission)
+ 
+     if(WIN32)
+         INSTALL(TARGETS FreeCADMain
+@@ -83,7 +83,7 @@
+ )
+ target_compile_warn_error(FreeCADMainCmd)
+ 
+-SET_BIN_DIR(FreeCADMainCmd FreeCADCmd)
++SET_BIN_DIR(FreeCADMainCmd FissionCmd)
+ 
+ if(WIN32)
+     INSTALL(TARGETS FreeCADMainCmd
+diff --git a/src/Main/freecad.rc.cmake b/src/Main/freecad.rc.cmake
+--- a/src/Main/freecad.rc.cmake
++++ b/src/Main/freecad.rc.cmake
+@@ -20,12 +20,12 @@
+     BEGIN
+         BLOCK "040904b0" // 409 stands for US English
+         BEGIN
+-            VALUE "CompanyName", "${PROJECT_NAME} Team"
+-            VALUE "FileDescription", "${PROJECT_NAME} main executable"
+-            VALUE "InternalName", "FreeCAD.exe"
++            VALUE "CompanyName", "Fission contributors"
++            VALUE "FileDescription", "Fission parametric mechanical CAD"
++            VALUE "InternalName", "Fission.exe"
+             VALUE "LegalCopyright", "Copyright (C) 2022"
+-            VALUE "OriginalFilename", "FreeCAD.exe"
+-            VALUE "ProductName", "${PROJECT_NAME}"
++            VALUE "OriginalFilename", "Fission.exe"
++            VALUE "ProductName", "Fission"
+             VALUE "ProductVersion", "${PACKAGE_VERSION}${PACKAGE_VERSION_SUFFIX}"
+         END
+     END
+diff --git a/src/Main/freecadCmd.rc.cmake b/src/Main/freecadCmd.rc.cmake
+--- a/src/Main/freecadCmd.rc.cmake
++++ b/src/Main/freecadCmd.rc.cmake
+@@ -20,12 +20,12 @@
+     BEGIN
+         BLOCK "040904b0" // 409 stands for US English
+         BEGIN
+-            VALUE "CompanyName", "${PROJECT_NAME} Team"
+-            VALUE "FileDescription", "${PROJECT_NAME} command line executable"
+-            VALUE "InternalName", "FreeCADCmd.exe"
++            VALUE "CompanyName", "Fission contributors"
++            VALUE "FileDescription", "Fission CAD command line"
++            VALUE "InternalName", "FissionCmd.exe"
+             VALUE "LegalCopyright", "Copyright (C) 2022"
+-            VALUE "OriginalFilename", "FreeCADCmd.exe"
+-            VALUE "ProductName", "${PROJECT_NAME}"
++            VALUE "OriginalFilename", "FissionCmd.exe"
++            VALUE "ProductName", "Fission"
+             VALUE "ProductVersion", "${PACKAGE_VERSION}${PACKAGE_VERSION_SUFFIX}"
+         END
+     END
+diff --git a/src/Gui/Icons/resource.qrc b/src/Gui/Icons/resource.qrc
+--- a/src/Gui/Icons/resource.qrc
++++ b/src/Gui/Icons/resource.qrc
+@@ -93,6 +93,8 @@
+         <file>freecad-doc.svg</file>
+         <file>freecad.svg</file>
+         <file>freecadsplash.svg</file>
++        <file>fission.svg</file>
++        <file>fissionsplash.svg</file>
+         <file>Geoassembly.svg</file>
+         <file>Geofeaturegroup.svg</file>
+         <file>Group.svg</file>
+diff --git a/src/Gui/CMakeLists.txt b/src/Gui/CMakeLists.txt
+--- a/src/Gui/CMakeLists.txt
++++ b/src/Gui/CMakeLists.txt
+@@ -899,6 +899,7 @@
+     Navigation/NavigationStylePyImp.cpp
+     Navigation/InventorNavigationStyle.cpp
+     Navigation/CADNavigationStyle.cpp
++    Navigation/FissionNavigationStyle.cpp
+     Navigation/RevitNavigationStyle.cpp
+     Navigation/BlenderNavigationStyle.cpp
+     Navigation/SiemensNXNavigationStyle.cpp
+diff --git a/src/Gui/SoFCDB.cpp b/src/Gui/SoFCDB.cpp
+--- a/src/Gui/SoFCDB.cpp
++++ b/src/Gui/SoFCDB.cpp
+@@ -212,6 +212,7 @@
+     NavigationStateChart::init();
+     BlenderNavigationStyle::init();
+     CADNavigationStyle::init();
++    FissionNavigationStyle::init();
+     GestureNavigationStyle::init();
+     MayaGestureNavigationStyle::init();
+     OpenCascadeNavigationStyle::init();
+diff --git a/src/Gui/Navigation/NavigationStyle.h b/src/Gui/Navigation/NavigationStyle.h
+--- a/src/Gui/Navigation/NavigationStyle.h
++++ b/src/Gui/Navigation/NavigationStyle.h
+@@ -547,6 +547,21 @@
+     SbBool lockButton1 {false};
+ };
+ 
++class GuiExport FissionNavigationStyle: public UserNavigationStyle
++{
++    using inherited = UserNavigationStyle;
++    TYPESYSTEM_HEADER_WITH_OVERRIDE();
++public:
++    FissionNavigationStyle();
++    ~FissionNavigationStyle() override;
++    const char* mouseButtons(ViewerMode) override;
++    std::string userFriendlyName() const override { return "Fission / Fusion"; }
++protected:
++    SbBool processSoEvent(const SoEvent* const ev) override;
++private:
++    SbBool lockButton1 {false};
++};
++
+ class GuiExport RevitNavigationStyle: public UserNavigationStyle
+ {
+     using inherited = UserNavigationStyle;
+diff --git a/src/Mod/Sketcher/Gui/ViewProviderSketch.cpp b/src/Mod/Sketcher/Gui/ViewProviderSketch.cpp
+--- a/src/Mod/Sketcher/Gui/ViewProviderSketch.cpp
++++ b/src/Mod/Sketcher/Gui/ViewProviderSketch.cpp
+@@ -651,7 +651,7 @@
+         (App::PropertyType)(App::Prop_ReadOnly),
+         "If true, only objects (or part of) located behind the sketch plane are visible.");
+     ADD_PROPERTY_TYPE(EditingWorkbench,
+-                      ("SketcherWorkbench"),
++                      ("FissionWorkbench"),
+                       "Visibility automation",
+                       (App::PropertyType)(App::Prop_ReadOnly),
+                       "Name of the workbench to activate when editing this sketch.");
+diff --git a/src/Gui/Navigation/FissionNavigationStyle.cpp b/src/Gui/Navigation/FissionNavigationStyle.cpp
+new file mode 100644
+--- /dev/null
++++ b/src/Gui/Navigation/FissionNavigationStyle.cpp
+@@ -0,0 +1,376 @@
++// SPDX-License-Identifier: LGPL-2.1-or-later
++/***************************************************************************
++ *   Copyright (c) 2011 Werner Mayer <wmayer[at]users.sourceforge.net>     *
++ *                                                                         *
++ *   This file is part of the FreeCAD CAx development system.              *
++ *                                                                         *
++ *   This library is free software; you can redistribute it and/or         *
++ *   modify it under the terms of the GNU Library General Public           *
++ *   License as published by the Free Software Foundation; either          *
++ *   version 2 of the License, or (at your option) any later version.      *
++ *                                                                         *
++ *   This library  is distributed in the hope that it will be useful,      *
++ *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
++ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
++ *   GNU Library General Public License for more details.                  *
++ *                                                                         *
++ *   You should have received a copy of the GNU Library General Public     *
++ *   License along with this library; see the file COPYING.LIB. If not,    *
++ *   write to the Free Software Foundation, Inc., 59 Temple Place,         *
++ *   Suite 330, Boston, MA  02111-1307, USA                                *
++ *                                                                         *
++ ***************************************************************************/
++
++#include <Inventor/nodes/SoCamera.h>
++#include <QApplication>
++
++#include "Navigation/NavigationStyle.h"
++#include "View3DInventorViewer.h"
++
++
++using namespace Gui;
++
++// ----------------------------------------------------------------------------------
++
++/* TRANSLATOR Gui::FissionNavigationStyle */
++
++TYPESYSTEM_SOURCE(Gui::FissionNavigationStyle, Gui::UserNavigationStyle)
++
++FissionNavigationStyle::FissionNavigationStyle()
++    : lockButton1(false)
++{}
++
++FissionNavigationStyle::~FissionNavigationStyle() = default;
++
++const char* FissionNavigationStyle::mouseButtons(ViewerMode mode)
++{
++    switch (mode) {
++        case NavigationStyle::SELECTION:
++            return QT_TR_NOOP("Press left mouse button");
++        case NavigationStyle::PANNING:
++            return QT_TR_NOOP("Hold middle mouse button and drag");
++        case NavigationStyle::DRAGGING:
++            return QT_TR_NOOP("Hold Shift and middle mouse button and drag");
++        case NavigationStyle::ZOOMING:
++            return QT_TR_NOOP(
++                "Scroll mouse wheel or hold Ctrl+Shift and middle mouse button and drag"
++            );
++        default:
++            return "No description";
++    }
++}
++
++SbBool FissionNavigationStyle::processSoEvent(const SoEvent* const ev)
++{
++    // Switch off viewing mode (Bug #0000911)
++    if (!this->isSeekMode() && !this->isAnimating() && this->isViewing()) {
++        this->setViewing(false);  // by default disable viewing mode to render the scene
++    }
++
++    const SoType type(ev->getTypeId());
++
++    const SbViewportRegion& vp = viewer->getSoRenderManager()->getViewportRegion();
++    const SbVec2s pos(ev->getPosition());
++    const SbVec2f posn = normalizePixelPos(pos);
++
++    const SbVec2f prevnormalized = this->lastmouseposition;
++    this->lastmouseposition = posn;
++
++    // Set to true if any event processing happened. Note that it is not
++    // necessary to restrict ourselves to only do one "action" for an
++    // event, we only need this flag to see if any processing happened
++    // at all.
++    SbBool processed = false;
++    bool triedSelectionDrag = false;
++
++    const ViewerMode curmode = this->currentmode;
++    ViewerMode newmode = curmode;
++
++    // Mismatches in state of the modifier keys happens if the user
++    // presses or releases them outside the viewer window.
++    syncModifierKeys(ev);
++
++    // give the nodes in the foreground root the chance to handle events (e.g color bar)
++    if (!viewer->isEditing()) {
++        processed = handleEventInForeground(ev);
++        if (processed) {
++            return true;
++        }
++    }
++
++    // Keyboard handling
++    if (type.isDerivedFrom(SoKeyboardEvent::getClassTypeId())) {
++        const auto* const event = static_cast<const SoKeyboardEvent*>(ev);
++        processed = processKeyboardEvent(event);
++    }
++
++    // Mouse Button / Spaceball Button handling
++    if (type.isDerivedFrom(SoMouseButtonEvent::getClassTypeId())) {
++        const auto* const event = (const SoMouseButtonEvent*)ev;
++        const int button = event->getButton();
++        const SbBool press = event->getState() == SoButtonEvent::DOWN ? true : false;
++
++        // SoDebugError::postInfo("processSoEvent", "button = %d", button);
++        switch (button) {
++            case SoMouseButtonEvent::BUTTON1:
++                this->lockrecenter = true;
++                this->button1down = press;
++                updateSelectionStartPosition(press, pos);
++                if (press && (this->currentmode == NavigationStyle::SEEK_WAIT_MODE)) {
++                    newmode = NavigationStyle::SEEK_MODE;
++                    this->seekToPoint(pos);  // implicitly calls interactiveCountInc()
++                    processed = true;
++                }
++                else if (
++                    press
++                    && (this->currentmode == NavigationStyle::PANNING
++                        || this->currentmode == NavigationStyle::ZOOMING)
++                ) {
++                    newmode = NavigationStyle::DRAGGING;
++                    saveCursorPosition(ev);
++                    this->centerTime = ev->getTime();
++                    processed = true;
++                }
++                else if (!press && (this->currentmode == NavigationStyle::DRAGGING)) {
++                    SbTime tmp = (ev->getTime() - this->centerTime);
++                    float dci = (float)QApplication::doubleClickInterval() / 1000.0f;
++                    if (tmp.getValue() < dci) {
++                        newmode = NavigationStyle::ZOOMING;
++                    }
++                    processed = true;
++                }
++                else if (viewer->isEditing() && (this->currentmode == NavigationStyle::SPINNING)) {
++                    processed = true;
++                }
++                else {
++                    processed = processClickEvent(event);
++                }
++                break;
++            case SoMouseButtonEvent::BUTTON2:
++                // If we are in edit mode then simply ignore the RMB events
++                // to pass the event to the base class.
++                this->lockrecenter = true;
++
++                // Don't show the context menu after dragging, panning or zooming
++                if (!press && (hasDragged || hasPanned || hasZoomed)) {
++                    processed = true;
++                }
++                if (!press && !viewer->isEditing()) {
++                    if (this->currentmode != NavigationStyle::ZOOMING
++                        && this->currentmode != NavigationStyle::PANNING
++                        && this->currentmode != NavigationStyle::DRAGGING) {
++                        if (this->isPopupMenuEnabled()) {
++                            this->openPopupMenu(event->getPosition());
++                        }
++                    }
++                }
++                // Alternative way of rotating & zooming
++                if (press
++                    && (this->currentmode == NavigationStyle::PANNING
++                        || this->currentmode == NavigationStyle::ZOOMING)) {
++                    newmode = NavigationStyle::DRAGGING;
++                    saveCursorPosition(ev);
++                    this->centerTime = ev->getTime();
++                    processed = true;
++                }
++                else if (!press && (this->currentmode == NavigationStyle::DRAGGING)) {
++                    SbTime tmp = (ev->getTime() - this->centerTime);
++                    float dci = (float)QApplication::doubleClickInterval() / 1000.0f;
++                    if (tmp.getValue() < dci) {
++                        newmode = NavigationStyle::ZOOMING;
++                    }
++                    processed = true;
++                }
++                this->button2down = press;
++                break;
++            case SoMouseButtonEvent::BUTTON3:
++                if (press) {
++                    this->centerTime = ev->getTime();
++                    setupPanningPlane(getCamera());
++                    this->lockrecenter = false;
++                }
++                else {
++                    SbTime tmp = (ev->getTime() - this->centerTime);
++                    float dci = (float)QApplication::doubleClickInterval() / 1000.0f;
++                    // is it just a middle click?
++                    if (tmp.getValue() < dci && !this->lockrecenter) {
++                        lookAtPoint(pos);
++                        processed = true;
++                    }
++                }
++                this->button3down = press;
++                break;
++            default:
++                break;
++        }
++    }
++
++    // Mouse Movement handling
++    if (type.isDerivedFrom(SoLocation2Event::getClassTypeId())) {
++        this->lockrecenter = true;
++        const auto* const event = (const SoLocation2Event*)ev;
++        if (this->currentmode == NavigationStyle::SELECTION && this->button1down) {
++            triedSelectionDrag = true;
++            processed = handleSelectionDragMotion(event, newmode, this->ctrldown);
++        }
++        else if (this->currentmode == NavigationStyle::ZOOMING) {
++            this->zoomByCursor(posn, prevnormalized);
++            processed = true;
++        }
++        else if (this->currentmode == NavigationStyle::PANNING) {
++            float ratio = vp.getViewportAspectRatio();
++            panCamera(
++                viewer->getSoRenderManager()->getCamera(),
++                ratio,
++                this->panningplane,
++                posn,
++                prevnormalized
++            );
++            processed = true;
++        }
++        else if (this->currentmode == NavigationStyle::DRAGGING) {
++            this->addToLog(event->getPosition(), event->getTime());
++            this->spin(posn);
++            moveCursorPosition();
++            processed = true;
++        }
++    }
++
++    // Spaceball & Joystick handling
++    if (type.isDerivedFrom(SoMotion3Event::getClassTypeId())) {
++        const auto* const event = static_cast<const SoMotion3Event*>(ev);
++        if (event) {
++            this->processMotionEvent(event);
++        }
++        processed = true;
++    }
++
++    enum
++    {
++        BUTTON1DOWN = 1 << 0,
++        BUTTON3DOWN = 1 << 1,
++        CTRLDOWN = 1 << 2,
++        SHIFTDOWN = 1 << 3,
++        BUTTON2DOWN = 1 << 4
++    };
++    unsigned int combo = (this->button1down ? BUTTON1DOWN : 0)
++        | (this->button2down ? BUTTON2DOWN : 0) | (this->button3down ? BUTTON3DOWN : 0)
++        | (this->ctrldown ? CTRLDOWN : 0) | (this->shiftdown ? SHIFTDOWN : 0);
++
++    switch (combo) {
++        case 0:
++            if (curmode == NavigationStyle::SPINNING) {
++                break;
++            }
++            newmode = NavigationStyle::IDLE;
++            // The left mouse button has been released right now
++            if (this->lockButton1) {
++                this->lockButton1 = false;
++                if (curmode != NavigationStyle::SELECTION) {
++                    processed = true;
++                }
++            }
++            break;
++        case BUTTON1DOWN:
++        case CTRLDOWN | BUTTON1DOWN:
++            if (newmode == NavigationStyle::INTERACT) {
++                break;
++            }
++            // make sure not to change the selection when stopping spinning
++            if (curmode == NavigationStyle::SPINNING
++                || (this->lockButton1 && curmode != NavigationStyle::SELECTION)) {
++                newmode = NavigationStyle::IDLE;
++            }
++            else {
++                newmode = NavigationStyle::SELECTION;
++            }
++            break;
++        case BUTTON3DOWN:
++            if (curmode == NavigationStyle::SPINNING) {
++                break;
++            }
++            else if (newmode == NavigationStyle::ZOOMING) {
++                break;
++            }
++            newmode = NavigationStyle::PANNING;
++
++            if (curmode == NavigationStyle::DRAGGING) {
++                if (doSpin()) {
++                    newmode = NavigationStyle::SPINNING;
++                    break;
++                }
++            }
++            break;
++        // Fission factory preset: Autodesk's public default mouse gestures.
++        // Preserve upstream camera math, selection, editing and 3Dconnexion paths.
++        case SHIFTDOWN | BUTTON3DOWN:
++            if (newmode != NavigationStyle::DRAGGING) {
++                saveCursorPosition(ev);
++            }
++            newmode = NavigationStyle::DRAGGING;
++            break;
++        case CTRLDOWN | SHIFTDOWN | BUTTON3DOWN:
++            newmode = NavigationStyle::ZOOMING;
++            break;
++        case CTRLDOWN | BUTTON2DOWN:
++            newmode = NavigationStyle::PANNING;
++            break;
++        case SHIFTDOWN | BUTTON2DOWN:
++            if (newmode != NavigationStyle::DRAGGING) {
++                saveCursorPosition(ev);
++            }
++            newmode = NavigationStyle::DRAGGING;
++            break;
++        case CTRLDOWN | SHIFTDOWN | BUTTON2DOWN:
++            newmode = NavigationStyle::ZOOMING;
++            break;
++
++            // There are many cases we don't handle that just falls through to
++            // the default case, like SHIFTDOWN, CTRLDOWN, CTRLDOWN|SHIFTDOWN,
++            // SHIFTDOWN|BUTTON3DOWN, SHIFTDOWN|CTRLDOWN|BUTTON3DOWN, etc.
++            // This is a feature, not a bug. :-)
++            //
++            // mortene.
++
++        default:
++            // The default will make a spin stop and otherwise not do
++            // anything.
++            break;
++    }
++
++    // If the selection button is pressed together with another button
++    // and the other button is released, don't switch to selection mode.
++    // Process when selection button is pressed together with other buttons that could trigger
++    // different actions.
++    if (this->button1down && (this->button2down || this->button3down)) {
++        clearSelectionStartPosition();
++        this->lockButton1 = true;
++        processed = true;
++    }
++
++    // Prevent interrupting rubber-band selection in sketcher
++    if (viewer->isEditing() && curmode == NavigationStyle::SELECTION
++        && newmode != NavigationStyle::IDLE) {
++        newmode = NavigationStyle::SELECTION;
++        processed = false;
++    }
++
++    // Reset flags when newmode is IDLE and the buttons are released
++    if (newmode == IDLE && !button1down && !button2down && !button3down) {
++        hasPanned = false;
++        hasDragged = false;
++        hasZoomed = false;
++    }
++
++    if (newmode != curmode) {
++        this->setViewingMode(newmode);
++    }
++
++    // If not handled in this class, pass on upwards in the inheritance
++    // hierarchy.
++    if (!processed && !triedSelectionDrag) {
++        processed = inherited::processSoEvent(ev);
++    }
++
++    return processed;
++}
+diff --git a/src/Gui/Icons/fission.svg b/src/Gui/Icons/fission.svg
+new file mode 100644
+--- /dev/null
++++ b/src/Gui/Icons/fission.svg
+@@ -0,0 +1,5 @@
++<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
++  <rect width="64" height="64" rx="10" fill="#18232e"/>
++  <path d="M15 48V16h33v8H24v7h19v8H24v9z" fill="#e7edf3"/>
++  <path d="M44 39l9 9-9 9-9-9z" fill="#20b9aa"/>
++</svg>
+diff --git a/src/Gui/Icons/fissionsplash.svg b/src/Gui/Icons/fissionsplash.svg
+new file mode 100644
+--- /dev/null
++++ b/src/Gui/Icons/fissionsplash.svg
+@@ -0,0 +1,12 @@
++<svg xmlns="http://www.w3.org/2000/svg" width="720" height="360" viewBox="0 0 720 360">
++<rect width="720" height="360" fill="#18232e"/>
++<g fill="none" stroke="#344653" stroke-width="1">
++<path d="M0 80h720M0 160h720M0 240h720M0 320h720M80 0v360M160 0v360M240 0v360M320 0v360M400 0v360M480 0v360M560 0v360M640 0v360"/>
++<circle cx="565" cy="177" r="91"/><circle cx="565" cy="177" r="72"/>
++<path d="M455 177h220M565 67v220"/></g>
++<path d="M57 171v-71h74v18H77v16h43v18H77v19z" fill="#e7edf3"/>
++<path d="M122 152l20 20-20 20-20-20z" fill="#20b9aa"/>
++<text x="55" y="241" fill="#e7edf3" font-family="Segoe UI, sans-serif" font-weight="600" font-size="43" letter-spacing="6">FISSION</text>
++<text x="58" y="272" fill="#a1b0bd" font-family="Segoe UI, sans-serif" font-size="16">LOCAL PARAMETRIC MECHANICAL DESIGN</text>
++<text x="58" y="326" fill="#a1b0bd" font-family="Segoe UI, sans-serif" font-size="11">Based on the FreeCAD open-source project</text>
++</svg>

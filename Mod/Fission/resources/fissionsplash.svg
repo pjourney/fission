@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="360" viewBox="0 0 720 360">
+<rect width="720" height="360" fill="#18232e"/>
+<g fill="none" stroke="#344653" stroke-width="1">
+<path d="M0 80h720M0 160h720M0 240h720M0 320h720M80 0v360M160 0v360M240 0v360M320 0v360M400 0v360M480 0v360M560 0v360M640 0v360"/>
+<circle cx="565" cy="177" r="91"/><circle cx="565" cy="177" r="72"/>
+<path d="M455 177h220M565 67v220"/></g>
+<path d="M57 171v-71h74v18H77v16h43v18H77v19z" fill="#e7edf3"/>
+<path d="M122 152l20 20-20 20-20-20z" fill="#20b9aa"/>
+<text x="55" y="241" fill="#e7edf3" font-family="Segoe UI, sans-serif" font-weight="600" font-size="43" letter-spacing="6">FISSION</text>
+<text x="58" y="272" fill="#a1b0bd" font-family="Segoe UI, sans-serif" font-size="16">LOCAL PARAMETRIC MECHANICAL DESIGN</text>
+<text x="58" y="326" fill="#a1b0bd" font-family="Segoe UI, sans-serif" font-size="11">Based on the FreeCAD open-source project</text>
+</svg>
