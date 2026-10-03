@@ -1,0 +1,10 @@
+/.deps/
+/build/
+/dist/
+/upstream-src/
+/test-output/
+__pycache__/
+*.pyc
+*.FCStd1
+*.log
+/.patch-staging/
