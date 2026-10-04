@@ -202,6 +202,128 @@ diff --git a/src/Mod/Sketcher/Gui/ViewProviderSketch.cpp b/src/Mod/Sketcher/Gui/
                      "  tv.activateWorkbench(ActiveSketch.ViewObject.EditingWorkbench)\n"
                      "if ActiveSketch.ViewObject.HideDependent:\n"
                      "  tv.hide(tv.get_all_dependent(%3, '%4'))\n"
+diff --git a/src/Mod/PartDesign/Gui/ViewProvider.cpp b/src/Mod/PartDesign/Gui/ViewProvider.cpp
+--- a/src/Mod/PartDesign/Gui/ViewProvider.cpp
++++ b/src/Mod/PartDesign/Gui/ViewProvider.cpp
+@@ -40,6 +40,8 @@
+ #include <Gui/Selection/SoFCUnifiedSelection.h>
+ #include <Gui/Inventor/So3DAnnotation.h>
+ #include <Gui/MainWindow.h>
++#include <Gui/Workbench.h>
++#include <Gui/WorkbenchManager.h>
+ #include <Gui/Utilities.h>
+ #include <Mod/PartDesign/App/Body.h>
+ #include <Mod/PartDesign/App/FeatureAddSub.h>
+@@ -153,7 +155,7 @@
+         // When double-clicking on the item for this feature the
+         // object unsets and sets its edit mode without closing
+         // the task panel
+-        Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog();
++        Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog(getObject()->getDocument());
+         TaskDlgFeatureParameters* featureDlg = qobject_cast<TaskDlgFeatureParameters*>(dlg);
+         // NOTE: if the dialog is not partDesigan dialog the featureDlg will be NULL
+         if (featureDlg && featureDlg->getViewObject() != this) {
+@@ -167,7 +169,7 @@
+             msgBox.setDefaultButton(QMessageBox::Yes);
+ 
+             if (msgBox.exec() == QMessageBox::Yes) {
+-                Gui::Control().reject();
++                Gui::Control().reject(getObject()->getDocument());
+             }
+             else {
+                 return false;
+@@ -188,8 +190,11 @@
+         // clear the selection (convenience)
+         Gui::Selection().clearSelection();
+ 
+-        // always change to PartDesign WB, remember where we come from
+-        oldWb = Gui::Command::assureWorkbench("PartDesignWorkbench");
++        // Keep the unified Fission workspace while using native feature editors.
++        auto* activeWorkbench = Gui::WorkbenchManager::instance()->active();
++        oldWb = activeWorkbench && activeWorkbench->name() == "FissionWorkbench"
++            ? "FissionWorkbench"
++            : Gui::Command::assureWorkbench("PartDesignWorkbench");
+ 
+         // start the edit dialog if
+         if (!featureDlg) {
+@@ -199,7 +204,7 @@
+             }
+         }
+ 
+-        Gui::Control().showDialog(featureDlg);
++        Gui::Control().showDialog(featureDlg, getObject()->getDocument());
+         return true;
+     }
+     else {
+@@ -230,7 +235,7 @@
+ 
+     if (ModNum == ViewProvider::Default) {
+         // when pressing ESC make sure to close the dialog
+-        Gui::Control().closeDialog();
++        Gui::Control().closeDialog(getObject()->getDocument());
+     }
+     else {
+         PartGui::ViewProviderPart::unsetEdit(ModNum);
+diff --git a/src/Mod/PartDesign/Gui/ViewProviderDatum.cpp b/src/Mod/PartDesign/Gui/ViewProviderDatum.cpp
+--- a/src/Mod/PartDesign/Gui/ViewProviderDatum.cpp
++++ b/src/Mod/PartDesign/Gui/ViewProviderDatum.cpp
+@@ -45,6 +45,8 @@
+ #include <Gui/Command.h>
+ #include <Gui/Control.h>
+ #include <Gui/MainWindow.h>
++#include <Gui/Workbench.h>
++#include <Gui/WorkbenchManager.h>
+ #include <Gui/View3DInventor.h>
+ #include <Gui/View3DInventorViewer.h>
+ #include <Gui/ViewProviderCoordinateSystem.h>
+@@ -249,7 +251,7 @@
+         // When double-clicking on the item for this datum feature the
+         // object unsets and sets its edit mode without closing
+         // the task panel
+-        Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog();
++        Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog(getObject()->getDocument());
+         TaskDlgDatumParameters* datumDlg = qobject_cast<TaskDlgDatumParameters*>(dlg);
+         if (datumDlg && datumDlg->getViewProvider() != this) {
+             datumDlg = nullptr;  // another datum feature left open its task panel
+@@ -262,7 +264,7 @@
+             msgBox.setDefaultButton(QMessageBox::Yes);
+             int ret = msgBox.exec();
+             if (ret == QMessageBox::Yes) {
+-                Gui::Control().closeDialog();
++                Gui::Control().closeDialog(getObject()->getDocument());
+             }
+             else {
+                 return false;
+@@ -272,14 +274,17 @@
+         // clear the selection (convenience)
+         Gui::Selection().clearSelection();
+ 
+-        oldWb = Gui::Command::assureWorkbench("PartDesignWorkbench");
++        auto* activeWorkbench = Gui::WorkbenchManager::instance()->active();
++        oldWb = activeWorkbench && activeWorkbench->name() == "FissionWorkbench"
++            ? "FissionWorkbench"
++            : Gui::Command::assureWorkbench("PartDesignWorkbench");
+ 
+         // start the edit dialog
+         if (datumDlg) {
+-            Gui::Control().showDialog(datumDlg);
++            Gui::Control().showDialog(datumDlg, getObject()->getDocument());
+         }
+         else {
+-            Gui::Control().showDialog(new TaskDlgDatumParameters(this));
++            Gui::Control().showDialog(new TaskDlgDatumParameters(this), getObject()->getDocument());
+         }
+ 
+         return true;
+@@ -329,7 +334,7 @@
+ 
+     if (ModNum == ViewProvider::Default) {
+         // when pressing ESC make sure to close the dialog
+-        Gui::Control().closeDialog();
++        Gui::Control().closeDialog(getObject()->getDocument());
+     }
+     else {
+         Gui::ViewProviderGeometryObject::unsetEdit(ModNum);
 diff --git a/src/Gui/Navigation/FissionNavigationStyle.cpp b/src/Gui/Navigation/FissionNavigationStyle.cpp
 new file mode 100644
 --- /dev/null

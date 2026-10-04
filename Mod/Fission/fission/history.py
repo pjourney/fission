@@ -110,7 +110,7 @@ def browser_records(document):
                 break
             path.add(ancestor)
             ancestor = parents[ancestor]
-    root = ("document", document.Name)
+    root = ("document", document.Name, "root")
     records = [TreeRecord(root, None, document.Label)]
     folders = set()
     for obj in objects:

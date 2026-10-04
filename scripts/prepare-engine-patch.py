@@ -104,6 +104,35 @@ replace_file("src/Mod/Sketcher/Gui/ViewProviderSketch.cpp", [
      '"if ActiveSketch.ViewObject.EditingWorkbench and Gui.activeWorkbench().name() != \'FissionWorkbench\':\\n"'),
 ])
 
+# Native feature editors can construct their panels before the editing view
+# becomes active. Bind them to the feature's document rather than whichever
+# document a workbench transition happens to activate at that instant.
+feature_workbench = '''auto* activeWorkbench = Gui::WorkbenchManager::instance()->active();
+        oldWb = activeWorkbench && activeWorkbench->name() == "FissionWorkbench"
+            ? "FissionWorkbench"
+            : Gui::Command::assureWorkbench("PartDesignWorkbench");'''
+for filename in ("ViewProvider.cpp", "ViewProviderDatum.cpp"):
+    pairs = [
+        ('#include <Gui/MainWindow.h>', '#include <Gui/MainWindow.h>\n#include <Gui/Workbench.h>\n#include <Gui/WorkbenchManager.h>'),
+        ('Gui::Control().activeDialog();', 'Gui::Control().activeDialog(getObject()->getDocument());'),
+        ('oldWb = Gui::Command::assureWorkbench("PartDesignWorkbench");', feature_workbench),
+    ]
+    if filename == "ViewProvider.cpp":
+        pairs += [
+            ('// always change to PartDesign WB, remember where we come from', '// Keep the unified Fission workspace while using native feature editors.'),
+            ('Gui::Control().reject();', 'Gui::Control().reject(getObject()->getDocument());'),
+            ('Gui::Control().showDialog(featureDlg);', 'Gui::Control().showDialog(featureDlg, getObject()->getDocument());'),
+            ('Gui::Control().closeDialog();', 'Gui::Control().closeDialog(getObject()->getDocument());'),
+        ]
+    else:
+        pairs += [
+            ('Gui::Control().closeDialog();', 'Gui::Control().closeDialog(getObject()->getDocument());'),
+            ('Gui::Control().closeDialog();', 'Gui::Control().closeDialog(getObject()->getDocument());'),
+            ('Gui::Control().showDialog(datumDlg);', 'Gui::Control().showDialog(datumDlg, getObject()->getDocument());'),
+            ('Gui::Control().showDialog(new TaskDlgDatumParameters(this));', 'Gui::Control().showDialog(new TaskDlgDatumParameters(this), getObject()->getDocument());'),
+        ]
+    replace_file("src/Mod/PartDesign/Gui/" + filename, pairs)
+
 navigation = baseline("src/Gui/Navigation/CADNavigationStyle.cpp")
 navigation = navigation.replace("CADNavigationStyle", "FissionNavigationStyle")
 navigation = navigation.replace('QT_TR_NOOP("Press middle or ctrl+right mouse button")', 'QT_TR_NOOP("Hold middle mouse button and drag")')

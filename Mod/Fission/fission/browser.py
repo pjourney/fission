@@ -93,7 +93,7 @@ class _DocumentDock(QtWidgets.QDockWidget):
     clearSelection = selection_changed
 
     def _object(self, key):
-        if not key or len(key) != 2 or key[0] in ("folder", "document"):
+        if not key or len(key) != 2:
             return None
         try:
             document = App.getDocument(key[0])
@@ -146,9 +146,14 @@ class _DocumentDock(QtWidgets.QDockWidget):
         try:
             view = Gui.getDocument(obj.Document.Name).activeView()
             if derived(obj, "PartDesign::Body"):
+                component = obj.getParentGeoFeatureGroup()
+                view.setActiveObject("part", component if component and derived(component, "App::Part") else None)
                 view.setActiveObject("pdbody", obj)
             elif derived(obj, "App::Part"):
                 view.setActiveObject("part", obj)
+                body = view.getActiveObject("pdbody")
+                if body and body.getParentGeoFeatureGroup() is not obj:
+                    view.setActiveObject("pdbody", None)
             else:
                 return
             self._select([obj])

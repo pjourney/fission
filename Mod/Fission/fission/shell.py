@@ -449,8 +449,8 @@ class Controller(QtCore.QObject):
         elif name == "NewComponent":
             self.new_component()
         elif name == "CreateSketch":
-            self.ensure_body()
-            self.execute("PartDesign_NewSketch")
+            if self.ensure_body():
+                self.execute("PartDesign_NewSketch")
         elif name == "FinishSketch":
             edit = Gui.activeDocument().getInEdit() if Gui.activeDocument() else None
             obj = edit.Object if edit else None
@@ -476,7 +476,7 @@ class Controller(QtCore.QObject):
             PreferencesDialog(self, self.main).exec()
         elif name == "About":
             QtWidgets.QMessageBox.about(self.main, "About Fission",
-                "<h2>Fission 0.1 — Development build</h2><p>Local parametric mechanical design.</p>"
+                "<h2>Fission 0.1 Alpha</h2><p>Local parametric mechanical design.</p>"
                 "<p>Fission is based on the FreeCAD open-source project.</p>"
                 "<p>FreeCAD's contributors retain their copyrights. Engine: LGPL 2.1 or later; "
                 "Fission presentation: MIT and LGPL, as identified in each source file. See the bundled NOTICE and licenses.</p>"
@@ -534,20 +534,41 @@ class Controller(QtCore.QObject):
     def ensure_body(self):
         if not App.ActiveDocument:
             self.new_design()
+        doc = App.ActiveDocument
+        if doc.HasPendingTransaction or Gui.Control.activeDialog():
+            self.notify("Finish or cancel the current operation before creating a sketch.")
+            return False
         view = Gui.activeDocument().activeView()
+        component = view.getActiveObject("part")
         body = view.getActiveObject("pdbody")
+        if body and body.getParentGeoFeatureGroup() is not component:
+            view.setActiveObject("pdbody", None)
+            body = None
         if not body:
-            bodies = [o for o in App.ActiveDocument.Objects if o.isDerivedFrom("PartDesign::Body")]
+            bodies = [o for o in doc.Objects if o.isDerivedFrom("PartDesign::Body")
+                      and o.getParentGeoFeatureGroup() is component]
             if len(bodies) == 1:
                 view.setActiveObject("pdbody", bodies[0])
+            elif not bodies:
+                # The native new-sketch workflow can auto-activate the sole
+                # Body anywhere in the document. Establish an actual Body in
+                # the selected component first, so it cannot target another.
+                doc.openTransaction("New body")
+                try:
+                    body = doc.addObject("PartDesign::Body", "Body")
+                    if component:
+                        component.addObject(body)
+                    doc.recompute()
+                    doc.commitTransaction()
+                except Exception:
+                    doc.abortTransaction()
+                    raise
+                view.setActiveObject("pdbody", body)
+        return True
 
     def edit_object(self, obj):
         if not obj or not obj.Document:
             return False
-        Gui.activeDocument().activeView().setActiveObject("pdbody", obj.getParentGeoFeatureGroup()
-            if obj.getParentGeoFeatureGroup() and obj.getParentGeoFeatureGroup().isDerivedFrom("PartDesign::Body") else None)
-        if obj.isDerivedFrom("Sketcher::SketchObject"):
-            self.prepare_sketch(obj)
         doc = Gui.getDocument(obj.Document.Name)
         if doc.getInEdit():
             self.notify("Finish or cancel the current feature before editing history.")
@@ -555,6 +576,15 @@ class Controller(QtCore.QObject):
         if obj.Document.HasPendingTransaction:
             self.notify("Finish or cancel the current operation before editing history.")
             return False
+        App.setActiveDocument(obj.Document.Name)
+        parent = obj.getParentGeoFeatureGroup()
+        body = parent if parent and parent.isDerivedFrom("PartDesign::Body") else None
+        component = body.getParentGeoFeatureGroup() if body else parent
+        view = doc.activeView()
+        view.setActiveObject("part", component if component and component.isDerivedFrom("App::Part") else None)
+        view.setActiveObject("pdbody", body)
+        if obj.isDerivedFrom("Sketcher::SketchObject"):
+            self.prepare_sketch(obj)
         Gui.Selection.clearSelection()
         Gui.Selection.addSelection(obj)
         # Native PartDesign double-click opens a transaction before showing its

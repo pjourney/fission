@@ -1,12 +1,6 @@
 # SPDX-License-Identifier: MIT
-import os
-import sys
 import FreeCAD as App
 import FreeCADGui as Gui
-
-_module_dir = os.path.join(App.getResourceDir(), "Mod", "Fission")
-if _module_dir not in sys.path:
-    sys.path.insert(0, _module_dir)
 
 # Factory settings are applied once in the isolated Fission application profile.
 _preferences = App.ParamGet("User parameter:BaseApp/Preferences/Fission")

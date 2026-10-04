@@ -41,6 +41,57 @@ def document(*objects):
 
 
 class HistoryTests(unittest.TestCase):
+    def test_document_and_object_named_document_cannot_collide_with_root(self):
+        for name in ("document", "folder"):
+            with self.subTest(name=name):
+                feature = Object(name)
+                doc = document(feature)
+                doc.Name = name
+                doc.Label = name
+                records = history.browser_records(doc)
+                keys = [record.key for record in records]
+                self.assertEqual(len(keys), len(set(keys)))
+                self.assertNotEqual(records[0].key, history.object_key(feature))
+                self.assertEqual(len([record for record in records if record.obj is feature]), 1)
+                parents = {record.key: record.parent for record in records}
+                for key in parents:
+                    visited = set()
+                    while key is not None:
+                        self.assertNotIn(key, visited)
+                        visited.add(key)
+                        key = parents[key]
+
+    def test_linear_pattern_remains_a_modeling_feature(self):
+        pattern = Object("HolePattern", "PartDesign::LinearPattern")
+        plane = Object("Plane", "PartDesign::Plane")
+        document(pattern, plane)
+        self.assertEqual(history.category(pattern), "Features")
+        self.assertTrue(history.is_history_feature(pattern))
+        self.assertEqual(history.category(plane), "Reference geometry")
+
+    def test_links_do_not_claim_their_source_objects_as_children(self):
+        feature = Object("SourcePad")
+        link = Object("Instance", "App::Link")
+        link.Group = [feature]
+        link.OutList = [feature]
+        doc = document(link, feature)
+        presentation = history.browser_records(doc)
+        records = {record.key: record for record in presentation}
+        self.assertEqual(records[history.object_key(feature)].parent[-1], "Features")
+        self.assertEqual(records[records[history.object_key(feature)].parent].parent, presentation[0].key)
+        self.assertEqual(history.category(link), "Components")
+
+    def test_cross_document_group_references_do_not_mutate_display_ownership(self):
+        foreign = Object("ForeignPad")
+        foreign_document = document(foreign)
+        foreign_document.Name = "Source"
+        component = Object("Component", "App::Part")
+        component.Group = [foreign]
+        target = document(component)
+        records = history.browser_records(target)
+        self.assertEqual([record.obj for record in records if record.obj is not None], [component])
+        self.assertEqual(foreign.Document.Name, "Source")
+
     def test_creation_order_survives_labels_and_dependencies(self):
         sketch = Object("Z", "Sketcher::SketchObject")
         pad = Object("A", parents=[sketch])

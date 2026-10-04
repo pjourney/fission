@@ -36,6 +36,10 @@ observers synchronize canvas, Browser and Timeline without feedback loops.
 Timeline double-click calls the native document's setEdit, reopening the actual
 feature task panel. Visibility and writable native Suppressed properties use
 document transactions. Existing pending task transactions are protected.
+Feature and datum task dialogs are explicitly attached to their object's
+document, so editing history cannot bind a panel to another open document.
+PartDesign editors keep the Design workspace active while using native preview,
+OK, Cancel and Undo behavior.
 Native errors/touched states, suppressed features, active edits and body tips
 are shown. Origin/container objects are excluded from modeling history.
 
@@ -63,6 +67,10 @@ implementation, retaining camera mathematics, selection, editing and SpaceMouse
 paths. MMB pans; Shift+MMB orbits; Ctrl+Shift+MMB drag-zooms; wheel zooms. FreeCAD's
 existing orientation cube remains clickable and original. Native presets remain
 selectable. Branding uses original SVG assets and a generated Windows icon.
+
+Fission disables native overlay docks on first launch and restores its Qt dock
+state after the native main window finishes restoring its own settings. This
+keeps Browser, Timeline and Tasks stable across startup and workspace changes.
 
 ## Source and upstream updates
 
