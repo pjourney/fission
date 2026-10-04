@@ -10,6 +10,12 @@ from . import theme
 from .commands import COMMANDS, ICON, catalog
 
 _controller = None
+WORKSPACES = ("Design", "Drawing", "Manufacture")
+WORKBENCH_WORKSPACES = {"FissionWorkbench": "Design", "TechDrawWorkbench": "Drawing",
+                        "CAMWorkbench": "Manufacture", "PathWorkbench": "Manufacture"}
+WORKSPACE_TABS = {"Design": ("SOLID", "SURFACE", "MESH", "ASSEMBLE", "UTILITIES", "SHEET METAL"),
+                  "Drawing": ("VIEWS", "ANNOTATE", "OUTPUT"),
+                  "Manufacture": ("SETUP", "MILLING", "TOOLPATH")}
 
 
 def existing_controller():
@@ -32,20 +38,24 @@ TABS = {
         ("INSPECT", ["Measure"]),
     ],
     "SURFACE": [
-        ("CREATE", [("Surface_Filling", "Fill"), ("Surface_GeomFillSurface", "Boundary"),
-                    ("Surface_Sections", "Loft Sections"), ("Surface_BlendCurve", "Blend Curve")]),
-        ("MODIFY", [("Surface_ExtendFace", "Extend"), ("Surface_Cut", "Trim"), ("Part_MakeSolid", "Stitch / Solid")]),
+        ("CREATE", ["CreateSketch", ("Surface_Filling", "Fill"), ("Surface_GeomFillSurface", "Boundary"),
+                    ("Surface_Sections", "Loft Sections"), ("Part_RuledSurface", "Ruled Surface")]),
+        ("CURVES", [("Surface_BlendCurve", "Blend Curve"), ("Surface_CurveOnMesh", "Curve on Mesh")]),
+        ("MODIFY", [("Surface_ExtendFace", "Extend"), ("Part_Cut", "Subtract")]),
+        ("CONVERT", ["Stitch", ("Part_Builder", "Build Shell"), ("Part_MakeSolid", "Convert to Solid"), ("Part_RefineShape", "Refine")]),
         ("INSPECT", [("Part_CheckGeometry", "Validate"), "Measure"]),
     ],
     "MESH": [
         ("CREATE", [("Mesh_Import", "Import Mesh"), ("Mesh_FromPartShape", "Tessellate")]),
-        ("MODIFY", [("Mesh_Smoothing", "Smooth"), ("Mesh_Decimating", "Reduce"),
-                    ("Mesh_HarmonizeNormals", "Align Normals"), ("Mesh_FillupHoles", "Fill Holes")]),
-        ("CONVERT", [("Part_ShapeFromMesh", "Mesh to Shape"), ("Part_MakeSolid", "Shape to Solid")]),
-        ("INSPECT", [("Mesh_Evaluation", "Repair / Analyze"), ("Mesh_Export", "Export Mesh")]),
+        ("MODIFY", [("Mesh_Smoothing", "Smooth"), ("Mesh_Decimating", "Reduce")]),
+        ("REPAIR", [("Mesh_Evaluation", "Analyze"), ("Mesh_HarmonizeNormals", "Align Normals"),
+                    ("Mesh_FlipNormals", "Flip Normals"), ("Mesh_FillupHoles", "Fill Holes")]),
+        ("CONVERT", [("Part_ShapeFromMesh", "Mesh to Shape"), ("Part_MakeSolid", "Convert to Solid"), ("Part_RefineShape", "Refine")]),
+        ("EXPORT", [("Mesh_Export", "Export Mesh")]),
     ],
     "ASSEMBLE": [
-        ("COMPONENTS", ["NewComponent", ("Assembly_CreateAssembly", "New Assembly"), ("Assembly_Insert", "Insert Component")]),
+        ("COMPONENTS", [("Assembly_CreateAssembly", "New Assembly"), ("Assembly_ActivateAssembly", "Activate Assembly"),
+                       ("Assembly_InsertLink", "Insert Component"), ("Assembly_InsertNewPart", "New Assembly Part")]),
         ("JOINTS", ["AssemblyJoint", ("Assembly_CreateJointRevolute", "Revolute"),
                     ("Assembly_CreateJointSlider", "Slider"), ("Assembly_CreateJointBall", "Ball")]),
         ("POSITION", [("Assembly_ToggleGrounded", "Ground / Unground"), ("Assembly_SolveAssembly", "Solve"), "Move"]),
@@ -69,6 +79,34 @@ TABS = {
                        ("Sketcher_ConstrainTangent", "Tangent"), ("Sketcher_ConstrainParallel", "Parallel"),
                        ("Sketcher_ConstrainPerpendicular", "Perpendicular"), ("Sketcher_ConstrainEqual", "Equal")]),
         ("FINISH", ["FinishSketch"]),
+    ],
+    "VIEWS": [
+        ("SHEET", [("TechDraw_PageDefault", "New Sheet"), ("TechDraw_PageTemplate", "Sheet Template")]),
+        ("VIEWS", [("TechDraw_View", "Base View"), ("TechDraw_ProjectionGroup", "Projected Views"),
+                   ("TechDraw_SectionView", "Section"), ("TechDraw_DetailView", "Detail")]),
+        ("DISPLAY", [("TechDraw_RedrawPage", "Update Sheet"), ("TechDraw_ToggleFrame", "View Frames")]),
+    ],
+    "ANNOTATE": [
+        ("DIMENSION", [("TechDraw_Dimension", "Dimension"), ("TechDraw_LengthDimension", "Length"),
+                       ("TechDraw_RadiusDimension", "Radius"), ("TechDraw_AngleDimension", "Angle")]),
+        ("NOTES", [("TechDraw_Annotation", "Text"), ("TechDraw_Balloon", "Balloon"), ("TechDraw_Hatch", "Hatch")]),
+    ],
+    "OUTPUT": [
+        ("EXPORT SHEET", [("TechDraw_ExportPagePDF", "PDF"), ("TechDraw_ExportPageSVG", "SVG"), ("TechDraw_ExportPageDXF", "DXF")]),
+        ("FILES", [("Std_Save", "Save Drawing")]),
+    ],
+    "SETUP": [
+        ("JOB", [("CAM_Job", "New Setup"), ("CAM_Workplane", "Workplane"), ("CAM_Sanity", "Check Setup")]),
+        ("TOOLS", [("CAM_ToolController", "Tool Controller"), ("CAM_ToolBitLibraryOpen", "Tool Library")]),
+    ],
+    "MILLING": [
+        ("2D MILLING", [("CAM_Profile", "Profile"), ("CAM_Pocket_Shape", "Pocket"), ("CAM_MillFacing", "Face"), ("CAM_Drilling", "Drill")]),
+        ("3D MILLING", [("CAM_Pocket3D", "3D Pocket"), ("CAM_Surface", "Surface")]),
+    ],
+    "TOOLPATH": [
+        ("VERIFY", [("CAM_SimulatorGL", "Simulate"), ("CAM_Inspect", "Inspect"), ("CAM_Sanity", "Check Setup")]),
+        ("OPERATIONS", [("CAM_OpActiveToggle", "Enable / Disable"), ("CAM_OperationCopy", "Copy Operation")]),
+        ("OUTPUT", [("CAM_Post", "Post Process"), ("CAM_PostSelected", "Post Selected")]),
     ],
 }
 
@@ -116,6 +154,10 @@ class Controller(QtCore.QObject):
         self._keep_shortcuts = False
         self._activation_pending = False
         self._tab = "SOLID"
+        self._workspace_name = "Design"
+        self._shell_workbench = None
+        self._workspace_document = None
+        self._design_tab = "SOLID"
         self.buttons = []
         self._saved_toolbar_visibility = {}
         self._saved_dock_visibility = {}
@@ -137,6 +179,7 @@ class Controller(QtCore.QObject):
         self.timer.setInterval(250)
         self.timer.timeout.connect(self.refresh_context)
         self.main.installEventFilter(self)
+        self.main.workbenchActivated.connect(self.workbench_changed)
         QtWidgets.QApplication.instance().aboutToQuit.connect(self.shutdown)
         self.welcome = None
         self.main.setMinimumSize(1080, 700)
@@ -147,15 +190,25 @@ class Controller(QtCore.QObject):
         return False
 
     def activate(self):
+        self.activate_workspace("Design")
+
+    def activate_workspace(self, name):
         self.active = True
-        self._keep_shortcuts = False
+        self._workspace_name = name
+        workbench = Gui.activeWorkbench()
+        self._shell_workbench = workbench.name() if workbench else None
         self.workspace.blockSignals(True)
-        self.workspace.setCurrentText("Design")
+        self.workspace.setCurrentText(name)
         self.workspace.blockSignals(False)
+        self.configure_tabs(name)
+        self._context = None
         self.hide_legacy_chrome()
         theme.apply(self.main)
-        for widget in (self.ribbon_dock, self.browser, self.timeline, self.nav_dock):
+        self.ribbon_dock.setWindowTitle(name)
+        for widget in (self.ribbon_dock, self.browser):
             widget.show()
+        self.nav_dock.setVisible(self.settings.GetBool("ShowNavigation", True))
+        self.timeline.setVisible(name == "Design")
         # FreeCAD restores its own main-window state after activating the first
         # workbench. Apply our saved state once that native startup has finished.
         if not self._activation_pending:
@@ -163,7 +216,41 @@ class Controller(QtCore.QObject):
             QtCore.QTimer.singleShot(0, self.complete_activation)
         self.shortcuts.apply_profile(self.shortcuts.profile.name)
         self.timer.start()
-        self.refresh_context()
+
+    def configure_tabs(self, workspace):
+        self.tabs.blockSignals(True)
+        while self.tabs.count():
+            self.tabs.removeTab(0)
+        keys = [key for key in WORKSPACE_TABS[workspace] if key in TABS
+                and any(Gui.Command.get(command_spec(item)[0]) for _, items in TABS[key] for item in items)]
+        for key in keys:
+            self.tabs.addTab(key)
+        desired = self._design_tab if workspace == "Design" else (keys[0] if keys else "")
+        self._tab = desired if desired in keys else (keys[0] if keys else "")
+        if self._tab:
+            self.tabs.setCurrentIndex(keys.index(self._tab))
+            self.build_groups(self._tab)
+        self.tabs.blockSignals(False)
+
+    def workbench_changed(self, _name):
+        # Native workbenches finish creating/removing their Qt chrome first.
+        QtCore.QTimer.singleShot(0, self.sync_workbench)
+
+    def sync_workbench(self):
+        workbench = Gui.activeWorkbench()
+        identifier = workbench.name() if workbench else None
+        workspace = WORKBENCH_WORKSPACES.get(identifier)
+        if workspace is None:
+            if self.active:
+                self.deactivate()
+            return
+        if not self.active or self._shell_workbench != identifier or self._workspace_name != workspace:
+            if self.active:
+                self.deactivate()
+            self.activate_workspace(workspace)
+        else:
+            self.hide_legacy_chrome()
+            self.refresh_context()
 
     def complete_activation(self):
         self._activation_pending = False
@@ -171,8 +258,16 @@ class Controller(QtCore.QObject):
             return
         self.hide_legacy_chrome()
         self.restore_layout()
+        document = self._workspace_document
+        self._workspace_document = None
+        if document and document in App.listDocuments():
+            Gui.setActiveDocument(document)
+            App.setActiveDocument(document)
+        if self._workspace_name != "Design":
+            self.timeline.hide()
+        self.nav_dock.setVisible(self.settings.GetBool("ShowNavigation", True))
         self.refresh_context()
-        if not App.ActiveDocument:
+        if self._workspace_name == "Design" and not App.ActiveDocument:
             self.show_welcome()
 
     def deactivate(self):
@@ -233,8 +328,8 @@ class Controller(QtCore.QObject):
         controls.addWidget(brand)
         controls.addSpacing(18)
         self.workspace = QtWidgets.QComboBox()
-        self.workspace.addItems(["Design", "Drawing", "Manufacture"])
-        self.workspace.setToolTip("Design combines modeling tools. Drawing and Manufacture use native specialist workspaces.")
+        self.workspace.addItems(list(WORKSPACES))
+        self.workspace.setToolTip("Design, technical drawings and manufacturing setups share the Fission workspace.")
         self.workspace.currentTextChanged.connect(self.switch_workspace)
         controls.addWidget(self.workspace)
         for cmd, label in [("Fission_NewDesign", "New"), ("Std_Open", "Open"), ("Std_Save", "Save"),
@@ -249,8 +344,8 @@ class Controller(QtCore.QObject):
         layout.addLayout(controls)
         self.tabs = QtWidgets.QTabBar()
         self.tabs.setExpanding(False)
-        for tab in TABS:
-            if tab == "SKETCH":
+        for tab in WORKSPACE_TABS["Design"]:
+            if tab not in TABS:
                 continue
             available = any(Gui.Command.get(command_spec(item)[0]) for _, items in TABS[tab] for item in items)
             if available:
@@ -285,7 +380,10 @@ class Controller(QtCore.QObject):
         button.setIcon(command_icon(command))
         button.setIconSize(QtCore.QSize(16, 16) if small else QtCore.QSize(26, 26))
         button.setToolButtonStyle(QtCore.Qt.ToolButtonTextBesideIcon if small else QtCore.Qt.ToolButtonTextUnderIcon)
-        button.setToolTip(title + "\n" + command)
+        native = Gui.Command.get(command)
+        description = native.getInfo().get("toolTip", title) if native else title
+        button.setToolTip(description)
+        button.setProperty("fissionDescription", description)
         button.clicked.connect(lambda checked=False, cmd=command: self.execute(cmd))
         button.setProperty("fissionCommand", command)
         self.buttons.append(button)
@@ -295,32 +393,38 @@ class Controller(QtCore.QObject):
         while self.group_layout.count():
             item = self.group_layout.takeAt(0)
             if item.widget():
+                item.widget().hide()
                 item.widget().deleteLater()
         self.buttons = [b for b in self.buttons if b.toolButtonStyle() == QtCore.Qt.ToolButtonTextBesideIcon]
         for name, items in TABS[tab]:
+            available = [(command_spec(item)) for item in items if Gui.Command.get(command_spec(item)[0])]
+            if not available:
+                continue
             group = QtWidgets.QWidget()
             gl = QtWidgets.QVBoxLayout(group)
             gl.setContentsMargins(3, 1, 3, 1)
             gl.setSpacing(0)
             row = QtWidgets.QHBoxLayout()
             row.setSpacing(1)
-            for item in items:
-                command, title = command_spec(item)
-                if Gui.Command.get(command):
-                    row.addWidget(self.make_button(command, title))
+            for command, title in available:
+                row.addWidget(self.make_button(command, title))
             gl.addLayout(row)
             label = QtWidgets.QLabel(name)
             label.setAlignment(QtCore.Qt.AlignCenter)
             label.setStyleSheet("font: 8pt 'Segoe UI'; padding-top: 3px")
             gl.addWidget(label)
             self.group_layout.addWidget(group)
+            group.show()
             divider = QtWidgets.QFrame()
             divider.setFrameShape(QtWidgets.QFrame.VLine)
             self.group_layout.addWidget(divider)
+            divider.show()
         self.group_layout.addStretch()
 
     def tab_changed(self, index):
         self._tab = self.tabs.tabText(index)
+        if self._workspace_name == "Design" and self._tab != "SKETCH":
+            self._design_tab = self._tab
         if self._tab in TABS:
             self.build_groups(self._tab)
             self.refresh_context()
@@ -330,6 +434,7 @@ class Controller(QtCore.QObject):
         self.nav_dock.setObjectName("FissionNavigationDock")
         self.nav_dock.setTitleBarWidget(QtWidgets.QWidget())
         self.nav_dock.setFeatures(QtWidgets.QDockWidget.NoDockWidgetFeatures)
+        self.nav_dock.setMaximumHeight(44)
         content = QtWidgets.QWidget()
         content.setObjectName("FissionNavigation")
         row = QtWidgets.QHBoxLayout(content)
@@ -356,12 +461,16 @@ class Controller(QtCore.QObject):
         edit = doc.getInEdit() if doc else None
         if edit and edit.Object.isDerivedFrom("Sketcher::SketchObject"):
             return "sketch"
+        if self._tab == "SURFACE":
+            return "surface"
+        if self._tab == "MESH":
+            return "mesh"
         if self._tab == "ASSEMBLE":
             return "assembly"
         return "model"
 
     def refresh_context(self):
-        if not self.active:
+        if not self.active or self._activation_pending:
             return
         doc = App.ActiveDocument
         gui_doc = Gui.getDocument(doc.Name) if doc else None
@@ -397,13 +506,25 @@ class Controller(QtCore.QObject):
                     if self.tabs.tabText(i) == "SKETCH":
                         self.tabs.removeTab(i)
                         break
-                self.tabs.setCurrentIndex(0)
-                self._tab = "SOLID"
-                self.build_groups("SOLID")
+                for i in range(self.tabs.count()):
+                    if self.tabs.tabText(i) == self._design_tab:
+                        self.tabs.setCurrentIndex(i)
+                        break
+                self._tab = self._design_tab
+                self.build_groups(self._tab)
         for button in self.buttons:
             try:
                 command = Gui.Command.get(button.property("fissionCommand"))
-                button.setEnabled(bool(command and command.isActive()))
+                actions = command.getAction() if command else []
+                # Query the native cached action state after activation settles.
+                # Calling isActive during native document/workbench teardown can
+                # dereference the view that FreeCAD is currently disposing.
+                wrapper = button.property("fissionCommand").startswith("Fission_")
+                button.setEnabled(bool(command and (command.isActive() if wrapper or not actions
+                                                     else any(action.isEnabled() for action in actions))))
+                hint = self.shortcuts.shortcut_for(button.property("fissionCommand"), ctx)
+                description = button.property("fissionDescription") or button.text()
+                button.setToolTip(description + ("\nShortcut: " + hint if hint else ""))
             except RuntimeError:
                 pass  # deferred-deleted group button
         if doc and self.welcome:
@@ -482,7 +603,7 @@ class Controller(QtCore.QObject):
             PreferencesDialog(self, self.main).exec()
         elif name == "About":
             QtWidgets.QMessageBox.about(self.main, "About Fission",
-                "<h2>Fission 0.1 Alpha</h2><p>Local parametric mechanical design.</p>"
+                "<h2>Fission 0.2 Alpha</h2><p>Local parametric mechanical design.</p>"
                 "<p>Fission is based on the FreeCAD open-source project.</p>"
                 "<p>FreeCAD's contributors retain their copyrights. Engine: LGPL 2.1 or later; "
                 "Fission presentation: MIT and LGPL, as identified in each source file. See the bundled NOTICE and licenses.</p>"
@@ -494,7 +615,22 @@ class Controller(QtCore.QObject):
         elif name == "ToggleBrowser":
             self.browser.setVisible(not self.browser.isVisible())
         elif name == "ToggleTimeline":
-            self.timeline.setVisible(not self.timeline.isVisible())
+            if self._workspace_name == "Design":
+                self.timeline.setVisible(not self.timeline.isVisible())
+        elif name == "ToggleNavigation":
+            visible = not self.nav_dock.isVisible()
+            self.settings.SetBool("ShowNavigation", visible)
+            self.nav_dock.setVisible(visible)
+            self.save_layout()
+        elif name == "ToggleViewCube":
+            self.toggle_view_cube()
+        elif name in ("PreviousWorkspace", "NextWorkspace"):
+            offset = -1 if name == "PreviousWorkspace" else 1
+            self.switch_workspace(WORKSPACES[(WORKSPACES.index(self._workspace_name) + offset) % len(WORKSPACES)])
+        elif name == "Stitch":
+            from .surface import StitchDialog
+            self.stitch_dialog = StitchDialog(self)
+            self.stitch_dialog.open()
         elif name == "ResetLayout":
             self.reset_layout()
         else:
@@ -502,7 +638,21 @@ class Controller(QtCore.QObject):
             if backend:
                 self.execute(backend)
 
+    def toggle_view_cube(self):
+        preferences = App.ParamGet("User parameter:BaseApp/Preferences/View")
+        enabled = not preferences.GetBool("ShowNaviCube", True)
+        preferences.SetBool("ShowNaviCube", enabled)
+        # Keep existing 3D documents in sync, including the one beneath a drawing.
+        for name in App.listDocuments():
+            document = Gui.getDocument(name)
+            for view in document.mdiViewsOfType("Gui::View3DInventor"):
+                view.getViewer().setEnabledNaviCube(enabled)
+        App.saveParameter()
+        self.notify("Orientation cube " + ("shown" if enabled else "hidden"))
+
     def new_design(self):
+        if self._workspace_name != "Design" and not self.switch_workspace("Design"):
+            return None
         doc = App.newDocument("Design")
         doc.Label = "Untitled Design"
         component = doc.addObject("App::Part", "Component")
@@ -516,6 +666,10 @@ class Controller(QtCore.QObject):
         view.setActiveObject("pdbody", body)
         view.viewAxonometric()
         view.fitAll()
+        for index in range(self.tabs.count()):
+            if self.tabs.tabText(index) == "SOLID":
+                self.tabs.setCurrentIndex(index)
+                break
         self.refresh_context()
         return doc
 
@@ -666,17 +820,33 @@ class Controller(QtCore.QObject):
         self.main.statusBar().showMessage(message, 8000)
 
     def switch_workspace(self, name):
-        if name == "Drawing":
-            self._keep_shortcuts = True
-            Gui.activateWorkbench("TechDrawWorkbench")
-        elif name == "Manufacture":
-            self._keep_shortcuts = True
-            Gui.activateWorkbench("CAMWorkbench" if "CAMWorkbench" in Gui.listWorkbenches() else "PathWorkbench")
+        if name not in WORKSPACES:
+            return False
+        doc = App.ActiveDocument
+        if Gui.Control.activeDialog() or (doc and doc.HasPendingTransaction):
+            self.workspace.blockSignals(True)
+            self.workspace.setCurrentText(self._workspace_name)
+            self.workspace.blockSignals(False)
+            self.notify("Finish or cancel the current operation before switching workspace.")
+            return False
+        target = {"Design": "FissionWorkbench", "Drawing": "TechDrawWorkbench",
+                  "Manufacture": "CAMWorkbench" if "CAMWorkbench" in Gui.listWorkbenches() else "PathWorkbench"}[name]
+        if target not in Gui.listWorkbenches():
+            self.notify(name + " is unavailable in this installation.")
+            return False
+        self._workspace_document = doc.Name if doc else None
+        if self.active:
+            self.deactivate()
+        Gui.activateWorkbench(target)
+        self.sync_workbench()
+        return True
 
     def save_layout(self):
         if self.active:
             state = bytes(self.main.saveState(1))
-            self.settings.SetString("Layout", base64.b64encode(state).decode("ascii"))
+            self.settings.SetString("Layout_" + self._workspace_name, base64.b64encode(state).decode("ascii"))
+            if self._workspace_name == "Design":
+                self.settings.SetString("Layout", base64.b64encode(state).decode("ascii"))
             self.settings.SetString("Geometry", base64.b64encode(bytes(self.main.saveGeometry())).decode("ascii"))
             App.saveParameter()
 
@@ -685,12 +855,15 @@ class Controller(QtCore.QObject):
             geometry = self.settings.GetString("Geometry", "")
             if geometry:
                 self.main.restoreGeometry(QtCore.QByteArray(base64.b64decode(geometry)))
-            state = self.settings.GetString("Layout", "")
+            state = self.settings.GetString("Layout_" + self._workspace_name, "")
+            if not state and self._workspace_name == "Design":
+                state = self.settings.GetString("Layout", "")
             if state:
                 self.main.restoreState(QtCore.QByteArray(base64.b64decode(state)), 1)
             else:
                 self.main.resizeDocks([self.browser], [255], QtCore.Qt.Horizontal)
                 self.main.resizeDocks([self.timeline], [100], QtCore.Qt.Vertical)
+                self.main.resizeDocks([self.nav_dock], [44], QtCore.Qt.Vertical)
         except (ValueError, RuntimeError):
             self.reset_layout()
 
@@ -706,8 +879,10 @@ class Controller(QtCore.QObject):
         self.main.addDockWidget(QtCore.Qt.LeftDockWidgetArea, self.browser)
         self.main.addDockWidget(QtCore.Qt.BottomDockWidgetArea, self.nav_dock)
         self.main.splitDockWidget(self.nav_dock, self.timeline, QtCore.Qt.Vertical)
-        for widget in (self.ribbon_dock, self.browser, self.timeline, self.nav_dock):
+        for widget in (self.ribbon_dock, self.browser, self.nav_dock):
             widget.show()
+        self.timeline.setVisible(self._workspace_name == "Design")
+        self.settings.SetBool("ShowNavigation", True)
         self.main.resizeDocks([self.browser], [255], QtCore.Qt.Horizontal)
         self.main.resizeDocks([self.timeline], [100], QtCore.Qt.Vertical)
         self.save_layout()

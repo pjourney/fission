@@ -1,0 +1,74 @@
+# SPDX-License-Identifier: LGPL-2.1-or-later
+"""Targeted native workspace workflows with isolated profiles and real editors."""
+import importlib
+import json
+import os
+from pathlib import Path
+import sys
+import time
+import traceback
+
+import FreeCAD as App
+import FreeCADGui as Gui
+from PySide import QtCore, QtWidgets
+
+try:
+    from PySide import QtTest
+except ImportError:
+    QtTest = importlib.import_module("PySide6.QtTest")
+
+ROOT = Path(os.environ["FISSION_SOURCE_ROOT"])
+OUTPUT = Path(os.environ["FISSION_TEST_OUTPUT"])
+sys.path.insert(0, str(ROOT / "tests"))
+import cad_workflows as cad
+import workspace_workflows as workflows
+
+
+def settle(milliseconds=100):
+    QtWidgets.QApplication.processEvents()
+    QtTest.QTest.qWait(milliseconds)
+    QtCore.QCoreApplication.sendPostedEvents(None, QtCore.QEvent.DeferredDelete)
+
+
+def run():
+    rows = []
+    controller = None
+    started = time.monotonic()
+    try:
+        cad.require(Path(App.ConfigGet("UserParameter")).resolve().parent == OUTPUT.resolve(),
+                    "Workspace tests require their own isolated user profile")
+        Gui.activateWorkbench("FissionWorkbench")
+        from fission.shell import get_controller
+        controller = get_controller()
+        controller.main.showNormal()
+        controller.main.resize(1800, 1000)
+        settle(250)
+        cases = [("Native Drawing page, projection task and SVG/PDF export", workflows.drawing),
+                 ("Native Manufacture Job, Profile editor and generated toolpath preview", workflows.manufacture)]
+        if hasattr(workflows, "navigation_controls"):
+            cases.append(("Workspace keyboard cycling and native navigation visibility controls", workflows.navigation_controls))
+        for name, function in cases:
+            App.Console.PrintMessage("FISSION WORKSPACE START: " + name + "\n")
+            try:
+                details = function(controller, settle, OUTPUT)
+                rows.append({"name": name, "status": "passed", "details": details})
+                App.Console.PrintMessage("FISSION WORKSPACE PASS: " + name + "\n")
+            except Exception as error:
+                rows.append({"name": name, "status": "failed", "error": str(error), "traceback": traceback.format_exc()})
+                App.Console.PrintError("FISSION WORKSPACE FAIL: {}: {}\n{}\n".format(name, error, rows[-1]["traceback"]))
+    except Exception as error:
+        rows.append({"name": "Workspace runner initialization", "status": "failed", "error": str(error), "traceback": traceback.format_exc()})
+    finally:
+        report = {"version": list(App.Version()), "executable_root": App.getHomePath(),
+                  "profile": App.ConfigGet("UserParameter"), "elapsed_seconds": round(time.monotonic() - started, 3),
+                  "passed": sum(row["status"] == "passed" for row in rows),
+                  "failed": sum(row["status"] == "failed" for row in rows), "cases": rows}
+        OUTPUT.mkdir(parents=True, exist_ok=True)
+        (OUTPUT / "workspace-results.json").write_text(json.dumps(report, indent=2, default=str) + "\n", encoding="utf-8")
+        (OUTPUT / "workspace-complete.txt").write_text("PASS\n" if rows and not report["failed"] else "FAIL\n", encoding="utf-8")
+        for name in list(App.listDocuments()):
+            App.closeDocument(name)
+        QtCore.QTimer.singleShot(180, QtWidgets.QApplication.instance().quit)
+
+
+QtCore.QTimer.singleShot(1800, run)

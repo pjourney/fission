@@ -144,8 +144,31 @@ class _DocumentDock(QtWidgets.QDockWidget):
 
     def _activate(self, obj):
         try:
-            view = Gui.getDocument(obj.Document.Name).activeView()
-            if derived(obj, "PartDesign::Body"):
+            gui_doc = Gui.getDocument(obj.Document.Name)
+            view = gui_doc.activeView()
+            if derived(obj, "Assembly::AssemblyObject"):
+                if Gui.activeWorkbench().name() != "FissionWorkbench":
+                    if not self.controller.switch_workspace("Design"):
+                        return
+                edit = gui_doc.getInEdit()
+                if Gui.Control.activeDialog() or obj.Document.HasPendingTransaction or (edit and not derived(edit.Object, "Assembly::AssemblyObject")):
+                    self.controller.notify("Finish or cancel the current operation before activating an assembly.")
+                    return
+                App.setActiveDocument(obj.Document.Name)
+                if edit and edit.Object is not obj:
+                    gui_doc.resetEdit()
+                if not edit or edit.Object is not obj:
+                    assemblies = [item for item in obj.Document.Objects if derived(item, "Assembly::AssemblyObject")]
+                    if len(assemblies) == 1:
+                        if not self.controller.execute("Assembly_ActivateAssembly"):
+                            return
+                    else:
+                        # The native command shows a chooser for multiple
+                        # assemblies. A Browser activation already identifies
+                        # the target; use that command's native setEdit API.
+                        if gui_doc.setEdit(obj.Name) is False:
+                            return
+            elif derived(obj, "PartDesign::Body"):
                 component = obj.getParentGeoFeatureGroup()
                 view.setActiveObject("part", component if component and derived(component, "App::Part") else None)
                 view.setActiveObject("pdbody", obj)

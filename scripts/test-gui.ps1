@@ -4,11 +4,13 @@ param(
     [string]$OutputDirectory = (Join-Path (Split-Path $PSScriptRoot -Parent) 'test-output'),
     [switch]$SkipSmoke,
     [switch]$SkipPersistence,
+    [switch]$WorkspacesOnly,
     [ValidateRange(15,180)][int]$TimeoutSeconds = 90
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path $PSScriptRoot -Parent
+$BuildDirectory = (Resolve-Path -LiteralPath $BuildDirectory).Path
 $binaryRoot = Join-Path $BuildDirectory 'bin'
 $executable = Join-Path $binaryRoot 'Fission.exe'
 if (-not (Test-Path -LiteralPath $executable)) { throw 'Build or stage Fission before testing.' }
@@ -44,8 +46,9 @@ try {
     $env:QT_QPA_PLATFORM_PLUGIN_PATH = Join-Path $binaryRoot 'platforms'
     $env:FISSION_SOURCE_ROOT = $projectRoot
     $env:FISSION_TEST_OUTPUT = $OutputDirectory
-    if (-not $SkipSmoke) { Invoke-FissionMacro 'native-smoke' 'tests\smoke.FCMacro' 'user.cfg' 'smoke-complete.txt' }
-    if (-not $SkipPersistence) {
+    if ($WorkspacesOnly) { Invoke-FissionMacro 'native-workspaces' 'tests\workspaces.FCMacro' 'workspace.cfg' 'workspace-complete.txt' }
+    if (-not $WorkspacesOnly -and -not $SkipSmoke) { Invoke-FissionMacro 'native-smoke' 'tests\smoke.FCMacro' 'user.cfg' 'smoke-complete.txt' }
+    if (-not $WorkspacesOnly -and -not $SkipPersistence) {
         foreach ($phase in @('write', 'read')) {
             $env:FISSION_PERSISTENCE_PHASE = $phase
             Invoke-FissionMacro ('persistence-' + $phase) 'tests\persistence.FCMacro' 'persistence.cfg' ('persistence-' + $phase + '-complete.txt')

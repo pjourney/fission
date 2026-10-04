@@ -206,8 +206,21 @@ class ShortcutTests(unittest.TestCase):
             self.assertEqual(self.profile.shortcut(row), "")
 
     def test_unsupported_fusion_keys_are_reserved(self):
-        for key in ["1", "2", "3", "Shift+N", "Shift+J", "Shift+S", "Ctrl+Alt+V", "Ctrl+["]:
+        for key in ["1", "2", "3", "Shift+N", "Shift+J", "Shift+S", "Ctrl+Alt+A", "Ctrl+Alt+P"]:
             self.assertEqual(self.profile.resolve(key)["state"], "unsupported")
+
+    def test_workspace_and_navigation_keys_are_implemented(self):
+        for key, command in [("Ctrl+[", "Fission_PreviousWorkspace"), ("Ctrl+]", "Fission_NextWorkspace"),
+                             ("Ctrl+Alt+N", "Fission_ToggleNavigation"), ("Ctrl+Alt+V", "Fission_ToggleViewCube")]:
+            for context in ("model", "drawing", "cam", "surface", "mesh"):
+                row = self.profile.resolve(key, context)
+                self.assertEqual(row["command"], command)
+                self.assertNotEqual(row.get("state"), "unsupported")
+
+    def test_specialist_contexts_keep_inspection_shortcuts(self):
+        for context in ("surface", "mesh"):
+            self.assertEqual(self.profile.resolve("I", context)["command"], "Fission_Measure")
+            self.assertEqual(self.profile.resolve("Ctrl+B", context)["command"], "Fission_Compute")
 
 
 class SearchTests(unittest.TestCase):

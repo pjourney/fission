@@ -86,6 +86,11 @@ def run_persistence_phase():
             preferences.navigation.setCurrentIndex(preferences.navigation.findData("Gui::CADNavigationStyle"))
             preferences.accept()  # Exercise the public preference commit without opening a modal dialog.
             controller.shortcuts.set_binding("Fission_Fillet", "Alt+F")
+            view_parameters = App.ParamGet("User parameter:BaseApp/Preferences/View")
+            if view_parameters.GetBool("ShowNaviCube", True):
+                controller.perform("ToggleViewCube")
+            if controller.nav_dock.isVisible():
+                controller.perform("ToggleNavigation")
             controller.main.resizeDocks([controller.browser], [365], QtCore.Qt.Horizontal)
             controller.main.resizeDocks([controller.timeline], [180], QtCore.Qt.Vertical)
             settle(350)
@@ -95,10 +100,13 @@ def run_persistence_phase():
             require(controller.settings.GetString("Theme", "") == "Light", "Light theme must be stored")
             require(controller.settings.GetString("Navigation", "") == "Gui::CADNavigationStyle", "Alternate navigation must be stored")
             require(controller.shortcuts.shortcut_for("Fission_Fillet", "model") == "Alt+F", "Custom model F shortcut must be stored")
+            require(not view_parameters.GetBool("ShowNaviCube", True), "Hidden native cube preference must be stored")
+            require(not controller.nav_dock.isVisible() and not controller.settings.GetBool("ShowNavigation", True),
+                    "Hidden navigation bar must be applied and stored")
             require(bool(controller.settings.GetString("Geometry", "")) and bool(controller.settings.GetString("Layout", "")), "Both native window geometry and dock state must be stored")
             geometry = geometry_state(controller)
             require(abs(geometry["browser_width"] - 365) < 40, "Browser width request must be applied before save")
-            result.update({"status": "passed", "theme": "Light", "navigation": "Gui::CADNavigationStyle", "fillet_shortcut": "Alt+F", "geometry": geometry, "layout": controller.settings.GetString("Layout", ""), "window_geometry": controller.settings.GetString("Geometry", ""), "config_bytes": profile.stat().st_size, "process_id": os.getpid()})
+            result.update({"status": "passed", "theme": "Light", "navigation": "Gui::CADNavigationStyle", "fillet_shortcut": "Alt+F", "view_cube_visible": False, "navigation_bar_visible": False, "geometry": geometry, "layout": controller.settings.GetString("Layout", ""), "window_geometry": controller.settings.GetString("Geometry", ""), "config_bytes": profile.stat().st_size, "process_id": os.getpid()})
         else:
             written = report["phases"]["write"]
             require(written["status"] == "passed", "A successful write process must precede read")
@@ -108,6 +116,9 @@ def run_persistence_phase():
             require(controller.settings.GetString("Navigation", "") == "Gui::CADNavigationStyle", "Alternate navigation must survive restart")
             view_parameters = App.ParamGet("User parameter:BaseApp/Preferences/View")
             require(view_parameters.GetString("NavigationStyle", "") == "Gui::CADNavigationStyle", "Native view navigation preference must survive restart")
+            require(not view_parameters.GetBool("ShowNaviCube", True), "Hidden cube preference must survive restart")
+            require(not controller.nav_dock.isVisible() and not controller.settings.GetBool("ShowNavigation", True),
+                    "Hidden navigation bar must survive restart in the actual Qt window")
             require(controller.shortcuts.shortcut_for("Fission_Fillet", "model") == "Alt+F", "Custom model F mapping must load in the new manager")
             independently_loaded = ShortcutProfile()
             independently_loaded.load(controller.shortcuts.parameters)
@@ -120,8 +131,18 @@ def run_persistence_phase():
             for name in ("maximized", "browser_visible", "timeline_visible"):
                 require(geometry[name] == written["geometry"][name], "Restored state differs: " + name)
             require(not App.listDocuments(), "Preferences/layout test must remain independent of CAD documents")
+            # A transient empty native viewer verifies the persisted cube policy
+            # on a newly created document; no CAD geometry or document is saved.
+            probe = App.newDocument("PersistedNativeCubePolicy")
+            try:
+                settle(120)
+                require(not Gui.activeDocument().activeView().getViewer().isEnabledNaviCube(),
+                        "A fresh native 3D viewer must apply the persisted hidden cube preference")
+            finally:
+                App.closeDocument(probe.Name)
+                settle(100)
             controller.main.grab().save(str(OUTPUT / "fission-persistence-light.png"))
-            result.update({"status": "passed", "theme": "Light", "navigation": "Gui::CADNavigationStyle", "fillet_shortcut": "Alt+F", "geometry": geometry, "process_id": os.getpid()})
+            result.update({"status": "passed", "theme": "Light", "navigation": "Gui::CADNavigationStyle", "fillet_shortcut": "Alt+F", "view_cube_visible": False, "navigation_bar_visible": False, "new_native_viewer_cube_visible": False, "geometry": geometry, "process_id": os.getpid()})
         App.Console.PrintMessage("FISSION PERSISTENCE {} PASS\n".format(PHASE))
     except Exception as exc:
         result.update({"error": str(exc), "traceback": traceback.format_exc()})

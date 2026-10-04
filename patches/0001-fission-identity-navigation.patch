@@ -324,6 +324,113 @@ diff --git a/src/Mod/PartDesign/Gui/ViewProviderDatum.cpp b/src/Mod/PartDesign/G
      }
      else {
          Gui::ViewProviderGeometryObject::unsetEdit(ModNum);
+diff --git a/src/Mod/Assembly/Gui/ViewProviderAssembly.cpp b/src/Mod/Assembly/Gui/ViewProviderAssembly.cpp
+--- a/src/Mod/Assembly/Gui/ViewProviderAssembly.cpp
++++ b/src/Mod/Assembly/Gui/ViewProviderAssembly.cpp
+@@ -61,6 +61,8 @@
+ #include <Gui/Inventor/Draggers/SoTransformDragger.h>
+ #include <Gui/MDIView.h>
+ #include <Gui/MainWindow.h>
++#include <Gui/Workbench.h>
++#include <Gui/WorkbenchManager.h>
+ #include <Gui/View3DInventor.h>
+ #include <Gui/View3DInventorViewer.h>
+ #include <Gui/ViewProviderLink.h>
+@@ -169,8 +171,10 @@
+         getDocument()->resetEdit();
+     }
+     else {
+-        // assure the Assembly workbench
+-        if (App::GetApplication()
++        // Preserve the unified shell while using native Assembly editing.
++        auto* activeWorkbench = Gui::WorkbenchManager::instance()->active();
++        const bool isFissionWb = activeWorkbench && activeWorkbench->name() == "FissionWorkbench";
++        if (!isFissionWb && App::GetApplication()
+                 .GetUserParameter()
+                 .GetGroup("BaseApp")
+                 ->GetGroup("Preferences")
+@@ -1959,7 +1963,8 @@
+ 
+ void ViewProviderAssembly::onWorkbenchActivated(const QString& name)
+ {
+-    bool isAssemblyWb = (name == QLatin1String("AssemblyWorkbench"));
++    bool isAssemblyWb = (name == QLatin1String("AssemblyWorkbench")
++                         || name == QLatin1String("FissionWorkbench"));
+     updateTaskPanel(isAssemblyWb);
+ }
+ 
+diff --git a/src/Mod/Assembly/Gui/ViewProviderAssembly.pyi b/src/Mod/Assembly/Gui/ViewProviderAssembly.pyi
+--- a/src/Mod/Assembly/Gui/ViewProviderAssembly.pyi
++++ b/src/Mod/Assembly/Gui/ViewProviderAssembly.pyi
+@@ -6,12 +6,12 @@
+ 
+ from Base.Metadata import export
+ from App.DocumentObject import DocumentObject
+-from Gui.ViewProvider import ViewProvider
++from Gui.ViewProviderGeometryObject import ViewProviderGeometryObject
+ 
+ SoTransformDragger: TypeAlias = Any
+ 
+ @export(Include="Mod/Assembly/Gui/ViewProviderAssembly.h", Namespace="AssemblyGui")
+-class ViewProviderAssembly(ViewProvider):
++class ViewProviderAssembly(ViewProviderGeometryObject):
+     """
+     This is the ViewProviderAssembly class
+ 
+diff --git a/src/Mod/Assembly/Gui/AppAssemblyGui.cpp b/src/Mod/Assembly/Gui/AppAssemblyGui.cpp
+--- a/src/Mod/Assembly/Gui/AppAssemblyGui.cpp
++++ b/src/Mod/Assembly/Gui/AppAssemblyGui.cpp
+@@ -28,6 +28,7 @@
+ 
+ #include "Commands.h"
+ #include "ViewProviderAssembly.h"
++#include "ViewProviderAssemblyPy.h"
+ #include "ViewProviderAssemblyLink.h"
+ #include "ViewProviderBom.h"
+ #include "ViewProviderGroups.h"
+@@ -68,5 +69,11 @@
+     AssemblyGui::ViewProviderSimulationGroup::init();
+     AssemblyGui::ViewProviderSnapshotGroup::init();
+ 
++    Base::Interpreter().addType(
++        &AssemblyGui::ViewProviderAssemblyPy::Type,
++        mod,
++        "ViewProviderAssembly"
++    );
++
+     PyMOD_Return(mod);
+ }
+diff --git a/src/Gui/DocumentObserverPython.cpp b/src/Gui/DocumentObserverPython.cpp
+--- a/src/Gui/DocumentObserverPython.cpp
++++ b/src/Gui/DocumentObserverPython.cpp
+@@ -196,6 +196,13 @@
+     const App::Property& Prop
+ )
+ {
++    // Base constructors change properties before the provider is attached.
++    // Requesting a Python object there caches an incomplete base-class binding.
++    const auto* provider = dynamic_cast<const Gui::ViewProviderDocumentObject*>(&Obj);
++    if (provider && !provider->getObject()) {
++        return;
++    }
++
+     Base::PyGILStateLocker lock;
+     try {
+         Py::Tuple args(2);
+@@ -216,6 +223,13 @@
+ 
+ void DocumentObserverPython::slotChangedObject(const Gui::ViewProvider& Obj, const App::Property& Prop)
+ {
++    // Base constructors change properties before the provider is attached.
++    // Requesting a Python object there caches an incomplete base-class binding.
++    const auto* provider = dynamic_cast<const Gui::ViewProviderDocumentObject*>(&Obj);
++    if (provider && !provider->getObject()) {
++        return;
++    }
++
+     Base::PyGILStateLocker lock;
+     try {
+         Py::Tuple args(2);
 diff --git a/src/Gui/Navigation/FissionNavigationStyle.cpp b/src/Gui/Navigation/FissionNavigationStyle.cpp
 new file mode 100644
 --- /dev/null
@@ -732,3 +839,104 @@ new file mode 100644
 +<text x="58" y="272" fill="#a1b0bd" font-family="Segoe UI, sans-serif" font-size="16">LOCAL PARAMETRIC MECHANICAL DESIGN</text>
 +<text x="58" y="326" fill="#a1b0bd" font-family="Segoe UI, sans-serif" font-size="11">Based on the FreeCAD open-source project</text>
 +</svg>
+diff --git a/src/Gui/TaskView/TaskView.cpp b/src/Gui/TaskView/TaskView.cpp
+--- a/src/Gui/TaskView/TaskView.cpp
++++ b/src/Gui/TaskView/TaskView.cpp
+@@ -444,6 +444,12 @@
+ 
+ void TaskView::slotActiveDocument(const App::Document& doc)
+ {
++    for (QWidget* panel : TaskWatcherPanel->contextualPanels) {
++        const QVariant owner = panel->property("contextualDocument");
++        if (owner.isValid()) {
++            panel->setVisible(owner.toString() == QString::fromUtf8(doc.getName()));
++        }
++    }
+     auto foundTaskInfo = std::ranges::find(taskInfos, &doc, &TaskInfo::Document);
+     if (foundTaskInfo != taskInfos.end()) {
+         setShownTaskInfo((foundTaskInfo - taskInfos.begin()));
+@@ -703,6 +709,14 @@
+     if (remove) {
+         remove->ActiveDialog->closed();
+         remove->ActiveDialog->emitDestructionSignal();
++        // Contextual solver panels belong to their document, not to the
++        // temporary operation dialog. Keep them alive after its OK/Cancel.
++        const auto panels = remove->taskPanel->contextualPanels;
++        remove->taskPanel->contextualPanels.clear();
++        for (QWidget* panel : panels) {
++            remove->taskPanel->contextualPanelsLayout->removeWidget(panel);
++            addContextualPanel(panel, remove->Document);
++        }
+         delete remove->ActiveCtrl;
+         delete remove->ActiveDialog;
+         delete remove->taskPanel;
+@@ -1019,14 +1033,21 @@
+ void TaskView::addContextualPanel(QWidget* panel, App::Document* doc)
+ {
+     auto foundTaskInfo = std::ranges::find(taskInfos, doc, &TaskInfo::Document);
+-    if (!panel || foundTaskInfo == taskInfos.end()
+-        || foundTaskInfo->taskPanel->contextualPanels.contains(panel)) {
++    TaskPanel* target = foundTaskInfo == taskInfos.end() ? TaskWatcherPanel : foundTaskInfo->taskPanel;
++    if (!panel || target->contextualPanels.contains(panel)) {
+         return;
+     }
+ 
+-    foundTaskInfo->taskPanel->contextualPanelsLayout->addWidget(panel);
+-    foundTaskInfo->taskPanel->contextualPanels.append(panel);
+-    panel->show();
++    if (doc) {
++        panel->setProperty("contextualDocument", QString::fromUtf8(doc->getName()));
++    }
++    target->contextualPanelsLayout->addWidget(panel);
++    target->contextualPanels.append(panel);
++    // A stacked task panel controls its children's document visibility.
++    // Only the shared watcher panel needs to filter individual children.
++    panel->setVisible(
++        target != TaskWatcherPanel || !doc || doc == App::GetApplication().getActiveDocument()
++    );
+     triggerMinimumSizeHint();
+     Q_EMIT taskUpdate();
+ }
+@@ -1034,14 +1055,18 @@
+ void TaskView::removeContextualPanel(QWidget* panel, App::Document* doc)
+ {
+     auto foundTaskInfo = std::ranges::find(taskInfos, doc, &TaskInfo::Document);
+-    if (!panel || foundTaskInfo == taskInfos.end()
+-        || !foundTaskInfo->taskPanel->contextualPanels.contains(panel)) {
++    TaskPanel* target = foundTaskInfo == taskInfos.end() ? TaskWatcherPanel : foundTaskInfo->taskPanel;
++    if (panel && !target->contextualPanels.contains(panel) && TaskWatcherPanel->contextualPanels.contains(panel)) {
++        target = TaskWatcherPanel;
++    }
++    if (!panel || !target->contextualPanels.contains(panel)) {
+         return;
+     }
+ 
+ 
+-    foundTaskInfo->taskPanel->contextualPanelsLayout->removeWidget(panel);
+-    foundTaskInfo->taskPanel->contextualPanels.removeOne(panel);
++    target->contextualPanelsLayout->removeWidget(panel);
++    target->contextualPanels.removeOne(panel);
++    panel->hide();
+     panel->deleteLater();
+     triggerMinimumSizeHint();
+     Q_EMIT taskUpdate();
+diff --git a/src/Mod/Assembly/Gui/ViewProviderAssembly.h b/src/Mod/Assembly/Gui/ViewProviderAssembly.h
+--- a/src/Mod/Assembly/Gui/ViewProviderAssembly.h
++++ b/src/Mod/Assembly/Gui/ViewProviderAssembly.h
+@@ -25,6 +25,7 @@
+ 
+ #include <QCoreApplication>
+ #include <QMetaObject>
++#include <QPointer>
+ #include <fastsignals/signal.h>
+ 
+ #include <Mod/Assembly/AssemblyGlobal.h>
+@@ -299,7 +300,7 @@
+         std::set<App::DocumentObject*>& visited
+     );
+ 
+-    TaskAssemblyMessages* taskSolver {nullptr};
++    QPointer<TaskAssemblyMessages> taskSolver;
+ 
+     QMetaObject::Connection workbenchConnection;
+     fastsignals::connection connectActivatedVP;

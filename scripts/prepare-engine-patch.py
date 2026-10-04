@@ -133,6 +133,71 @@ for filename in ("ViewProvider.cpp", "ViewProviderDatum.cpp"):
         ]
     replace_file("src/Mod/PartDesign/Gui/" + filename, pairs)
 
+# Keep native Assembly edit mode and its solver panel within the unified shell.
+replace_file("src/Mod/Assembly/Gui/ViewProviderAssembly.cpp", [
+    ('#include <Gui/MainWindow.h>', '#include <Gui/MainWindow.h>\n#include <Gui/Workbench.h>\n#include <Gui/WorkbenchManager.h>'),
+    ('        // assure the Assembly workbench\n        if (App::GetApplication()',
+     '''        // Preserve the unified shell while using native Assembly editing.
+        auto* activeWorkbench = Gui::WorkbenchManager::instance()->active();
+        const bool isFissionWb = activeWorkbench && activeWorkbench->name() == "FissionWorkbench";
+        if (!isFissionWb && App::GetApplication()'''),
+    ('bool isAssemblyWb = (name == QLatin1String("AssemblyWorkbench"));',
+     'bool isAssemblyWb = (name == QLatin1String("AssemblyWorkbench")\n                         || name == QLatin1String("FissionWorkbench"));'),
+])
+
+# Assembly's Python wrapper must inherit the native document-provider API.
+replace_file("src/Mod/Assembly/Gui/ViewProviderAssembly.pyi", [
+    ('from Gui.ViewProvider import ViewProvider',
+     'from Gui.ViewProviderGeometryObject import ViewProviderGeometryObject'),
+    ('class ViewProviderAssembly(ViewProvider):',
+     'class ViewProviderAssembly(ViewProviderGeometryObject):'),
+])
+replace_file("src/Mod/Assembly/Gui/AppAssemblyGui.cpp", [
+    ('#include "ViewProviderAssembly.h"', '#include "ViewProviderAssembly.h"\n#include "ViewProviderAssemblyPy.h"'),
+    ('    AssemblyGui::ViewProviderSnapshotGroup::init();\n',
+     '''    AssemblyGui::ViewProviderSnapshotGroup::init();
+
+    Base::Interpreter().addType(
+        &AssemblyGui::ViewProviderAssemblyPy::Type,
+        mod,
+        "ViewProviderAssembly"
+    );
+'''),
+])
+
+# GUI observers must not cache base-class Python bindings during construction.
+replace_file("src/Gui/DocumentObserverPython.cpp", [
+    ('''void DocumentObserverPython::slotBeforeChangeObject(
+    const Gui::ViewProvider& Obj,
+    const App::Property& Prop
+)
+{
+''', '''void DocumentObserverPython::slotBeforeChangeObject(
+    const Gui::ViewProvider& Obj,
+    const App::Property& Prop
+)
+{
+    // Base constructors change properties before the provider is attached.
+    // Requesting a Python object there caches an incomplete base-class binding.
+    const auto* provider = dynamic_cast<const Gui::ViewProviderDocumentObject*>(&Obj);
+    if (provider && !provider->getObject()) {
+        return;
+    }
+
+'''),
+    ('void DocumentObserverPython::slotChangedObject(const Gui::ViewProvider& Obj, const App::Property& Prop)\n{\n',
+     '''void DocumentObserverPython::slotChangedObject(const Gui::ViewProvider& Obj, const App::Property& Prop)
+{
+    // Base constructors change properties before the provider is attached.
+    // Requesting a Python object there caches an incomplete base-class binding.
+    const auto* provider = dynamic_cast<const Gui::ViewProviderDocumentObject*>(&Obj);
+    if (provider && !provider->getObject()) {
+        return;
+    }
+
+'''),
+])
+
 navigation = baseline("src/Gui/Navigation/CADNavigationStyle.cpp")
 navigation = navigation.replace("CADNavigationStyle", "FissionNavigationStyle")
 navigation = navigation.replace('QT_TR_NOOP("Press middle or ctrl+right mouse button")', 'QT_TR_NOOP("Hold middle mouse button and drag")')
@@ -157,6 +222,173 @@ navigation = navigation.replace(anchor, new_cases + anchor, 1)
 changes["src/Gui/Navigation/FissionNavigationStyle.cpp"] = ("", navigation)
 for filename in ("fission.svg", "fissionsplash.svg"):
     changes["src/Gui/Icons/" + filename] = ("", (root / "Mod/Fission/resources" / filename).read_text(encoding="utf-8"))
+
+# Preserve document-owned contextual panels across operation dialogs.
+replace_file("src/Gui/TaskView/TaskView.cpp", [
+    ('''}
+
+void TaskView::slotActiveDocument(const App::Document& doc)
+{
+    auto foundTaskInfo = std::ranges::find(taskInfos, &doc, &TaskInfo::Document);
+    if (foundTaskInfo != taskInfos.end()) {
+        setShownTaskInfo((foundTaskInfo - taskInfos.begin()));
+    }
+''', '''}
+
+void TaskView::slotActiveDocument(const App::Document& doc)
+{
+    for (QWidget* panel : TaskWatcherPanel->contextualPanels) {
+        const QVariant owner = panel->property("contextualDocument");
+        if (owner.isValid()) {
+            panel->setVisible(owner.toString() == QString::fromUtf8(doc.getName()));
+        }
+    }
+    auto foundTaskInfo = std::ranges::find(taskInfos, &doc, &TaskInfo::Document);
+    if (foundTaskInfo != taskInfos.end()) {
+        setShownTaskInfo((foundTaskInfo - taskInfos.begin()));
+    }
+'''),
+    ('''
+    if (remove) {
+        remove->ActiveDialog->closed();
+        remove->ActiveDialog->emitDestructionSignal();
+        delete remove->ActiveCtrl;
+        delete remove->ActiveDialog;
+        delete remove->taskPanel;
+    }
+''', '''
+    if (remove) {
+        remove->ActiveDialog->closed();
+        remove->ActiveDialog->emitDestructionSignal();
+        // Contextual solver panels belong to their document, not to the
+        // temporary operation dialog. Keep them alive after its OK/Cancel.
+        const auto panels = remove->taskPanel->contextualPanels;
+        remove->taskPanel->contextualPanels.clear();
+        for (QWidget* panel : panels) {
+            remove->taskPanel->contextualPanelsLayout->removeWidget(panel);
+            addContextualPanel(panel, remove->Document);
+        }
+        delete remove->ActiveCtrl;
+        delete remove->ActiveDialog;
+        delete remove->taskPanel;
+    }
+'''),
+    ('''
+void TaskView::addContextualPanel(QWidget* panel, App::Document* doc)
+{
+    auto foundTaskInfo = std::ranges::find(taskInfos, doc, &TaskInfo::Document);
+    if (!panel || foundTaskInfo == taskInfos.end()
+        || foundTaskInfo->taskPanel->contextualPanels.contains(panel)) {
+        return;
+    }
+
+    foundTaskInfo->taskPanel->contextualPanelsLayout->addWidget(panel);
+    foundTaskInfo->taskPanel->contextualPanels.append(panel);
+    panel->show();
+    triggerMinimumSizeHint();
+    Q_EMIT taskUpdate();
+}
+
+void TaskView::removeContextualPanel(QWidget* panel, App::Document* doc)
+{
+    auto foundTaskInfo = std::ranges::find(taskInfos, doc, &TaskInfo::Document);
+    if (!panel || foundTaskInfo == taskInfos.end()
+        || !foundTaskInfo->taskPanel->contextualPanels.contains(panel)) {
+        return;
+    }
+
+
+    foundTaskInfo->taskPanel->contextualPanelsLayout->removeWidget(panel);
+    foundTaskInfo->taskPanel->contextualPanels.removeOne(panel);
+    panel->deleteLater();
+    triggerMinimumSizeHint();
+    Q_EMIT taskUpdate();
+}
+''', '''
+void TaskView::addContextualPanel(QWidget* panel, App::Document* doc)
+{
+    auto foundTaskInfo = std::ranges::find(taskInfos, doc, &TaskInfo::Document);
+    TaskPanel* target = foundTaskInfo == taskInfos.end() ? TaskWatcherPanel : foundTaskInfo->taskPanel;
+    if (!panel || target->contextualPanels.contains(panel)) {
+        return;
+    }
+
+    if (doc) {
+        panel->setProperty("contextualDocument", QString::fromUtf8(doc->getName()));
+    }
+    target->contextualPanelsLayout->addWidget(panel);
+    target->contextualPanels.append(panel);
+    // A stacked task panel controls its children's document visibility.
+    // Only the shared watcher panel needs to filter individual children.
+    panel->setVisible(
+        target != TaskWatcherPanel || !doc || doc == App::GetApplication().getActiveDocument()
+    );
+    triggerMinimumSizeHint();
+    Q_EMIT taskUpdate();
+}
+
+void TaskView::removeContextualPanel(QWidget* panel, App::Document* doc)
+{
+    auto foundTaskInfo = std::ranges::find(taskInfos, doc, &TaskInfo::Document);
+    TaskPanel* target = foundTaskInfo == taskInfos.end() ? TaskWatcherPanel : foundTaskInfo->taskPanel;
+    if (panel && !target->contextualPanels.contains(panel) && TaskWatcherPanel->contextualPanels.contains(panel)) {
+        target = TaskWatcherPanel;
+    }
+    if (!panel || !target->contextualPanels.contains(panel)) {
+        return;
+    }
+
+
+    target->contextualPanelsLayout->removeWidget(panel);
+    target->contextualPanels.removeOne(panel);
+    panel->hide();
+    panel->deleteLater();
+    triggerMinimumSizeHint();
+    Q_EMIT taskUpdate();
+}
+'''),
+])
+
+# Preserve document-owned contextual panels across operation dialogs.
+replace_file("src/Mod/Assembly/Gui/ViewProviderAssembly.h", [
+    ('''#pragma once
+
+#include <QCoreApplication>
+#include <QMetaObject>
+#include <fastsignals/signal.h>
+
+#include <Mod/Assembly/AssemblyGlobal.h>
+
+''', '''#pragma once
+
+#include <QCoreApplication>
+#include <QMetaObject>
+#include <QPointer>
+#include <fastsignals/signal.h>
+
+#include <Mod/Assembly/AssemblyGlobal.h>
+
+'''),
+    ('''        IsolateMode mode,
+        std::set<App::DocumentObject*>& visited
+    );
+
+    TaskAssemblyMessages* taskSolver {nullptr};
+
+    QMetaObject::Connection workbenchConnection;
+    fastsignals::connection connectActivatedVP;
+    fastsignals::connection connectSolverUpdate;
+''', '''        IsolateMode mode,
+        std::set<App::DocumentObject*>& visited
+    );
+
+    QPointer<TaskAssemblyMessages> taskSolver;
+
+    QMetaObject::Connection workbenchConnection;
+    fastsignals::connection connectActivatedVP;
+    fastsignals::connection connectSolverUpdate;
+'''),
+])
 
 patch = []
 for filename, (before, after) in changes.items():

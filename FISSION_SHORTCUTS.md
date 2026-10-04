@@ -1,4 +1,4 @@
-# Fission keyboard shortcuts
+# Fission 0.2 Alpha keyboard shortcuts
 
 Fission / Fusion is the default profile. These defaults come from Autodesk's public [Fusion keyboard reference](https://help.autodesk.com/cloudhelp/ENU/Fusion-GetStarted/files/GUID-F0491540-0324-470A-B651-2238D0EFAC30.htm), checked on October 3, 2026. They describe behavior; Fission includes no Autodesk icons, artwork, or application assets.
 
@@ -11,11 +11,11 @@ The table records the implemented dispatcher mapping. Actual operation availabil
 | Press Pull | Q | Fission_Extrude | Model / sketch | Partial: sketch extrusion; face offset is not implemented |
 | Fillet | F | Fission_Fillet | Model | Mapped |
 | Hole | H | Fission_Hole | Model | Mapped |
-| Move | M | Fission_Move | Model / assembly | Mapped to Fission's Move / Copy adapter |
+| Move | M | Fission_Move | Model / assembly / surface / mesh | Mapped to Fission's Move / Copy adapter |
 | Visibility | V | Fission_Visibility | Any | Mapped |
-| Appearance | A | Fission_Appearance | Model / sketch / assembly | Native Std_SetAppearance editor |
-| Measure | I | Fission_Measure | Model / sketch / assembly | Mapped |
-| Compute All | Ctrl+B | Fission_Compute | Model / sketch / assembly | Recompute document |
+| Appearance | A | Fission_Appearance | Model / sketch / assembly / surface / mesh | Native Std_SetAppearance editor |
+| Measure | I | Fission_Measure | Model / sketch / assembly / surface / mesh | Mapped |
+| Compute All | Ctrl+B | Fission_Compute | Model / sketch / assembly / surface / mesh | Recompute document |
 | Joint | J | Fission_AssemblyJoint | Model / assembly | Uses native Assembly joint workflow |
 | Line | L | Sketcher_CreateLine | Sketch | Mapped |
 | Rectangle | R | Sketcher_CreateRectangle | Sketch | Two-point rectangle |
@@ -34,6 +34,10 @@ The table records the implemented dispatcher mapping. Actual operation availabil
 | Copy / paste / cut | Ctrl+C / Ctrl+V / Ctrl+X | Std_Copy / Std_Paste / Std_Cut | Any | Native FreeCAD semantics |
 | Delete | Delete | Std_Delete | Any | Native dependency-aware deletion |
 | Browser | Ctrl+Alt+B | Fission_ToggleBrowser | Any | Show / hide Browser |
+| ViewCube | Ctrl+Alt+V | Fission_ToggleViewCube | Any active document | Show / hide the native orientation cube in open 3D views; preference persists |
+| Navigation bar | Ctrl+Alt+N | Fission_ToggleNavigation | Any | Show / hide Fission's navigation strip; preference persists |
+| Previous workspace | Ctrl+[ | Fission_PreviousWorkspace | Any | Cycle Design → Manufacture → Drawing → Design |
+| Next workspace | Ctrl+] | Fission_NextWorkspace | Any | Cycle Design → Drawing → Manufacture → Design |
 | Reset Layout | Ctrl+Alt+R | Fission_ResetLayout | Any | Restore Fission panels |
 | Projected View | P | TechDraw_ProjectionGroup | Drawing | Native projection group; different panel details |
 | Dimension | D | TechDraw_Dimension | Drawing | Native drawing dimension |
@@ -44,7 +48,11 @@ Fit uses **F6**, documented in Autodesk's [preferences reference](https://help.a
 
 ## Context and typing
 
-The active context is `model`, `sketch`, `assembly`, or `drawing`. Sketch and drawing can reuse D/P/T without collisions. Sketch context comes from the actual active Sketcher edit state, not the toolbar's selected tab.
+The active context is `model`, `sketch`, `assembly`, `surface`, `mesh`, `drawing`, or `cam`. In Design, the Solid/Utilities tabs use `model`; Surface, Mesh, and Assemble select their corresponding contexts. Sketch context comes from the actual active Sketcher edit state and takes priority over the selected Design tab. Drawing uses native TechDraw; Manufacture uses native CAM. Sketch and drawing can reuse D/P/T without collisions.
+
+I, Ctrl+B, and A remain available in Surface and Mesh, as does M outside Sketch. Native Surface, Mesh, TechDraw, and CAM commands appear in Keyboard Shortcuts with their workspace contexts and can receive custom bindings. Stitch (`Fission_Stitch`) has no factory key; it sews selected native faces/shapes into a `Surface::Sewing` feature. **Convert to Solid** is a separate operation for a closed shell.
+
+Workspace cycling uses the same native workbench transition as the workspace selector. Finish or cancel the current task before changing workspace. Design keeps Fission's native workbench; Drawing keeps TechDraw; Manufacture keeps CAM. The ribbon and Browser stay available in these workspaces. Timeline is available in Design, and each workspace saves its dock layout separately.
 
 Fission intercepts Qt `ShortcutOverride` and `KeyPress` events. Single-letter commands and application mappings stay inactive while a line edit, spin box, text editor, editable combo box, or shortcut editor has focus. Text input retains normal clipboard and undo behavior. Open modal dialogs and menus also retain their own keyboard handling.
 
@@ -60,11 +68,11 @@ The active preset and custom edits persist under `User parameter:BaseApp/Prefere
 
 ## Explicit gaps
 
-- Shift+N (Component Colors), Shift+J (As-built Joint), Shift+S (Scripts/Add-ins), selection modes 1/2/3, shell toggles for ViewCube/navigation/comments/data panel/text commands, and workspace-cycle keys are reserved but not implemented. Pressing a reserved key shows a status message instead of invoking an unrelated stock FreeCAD action. Reserved rows are labeled in preferences and can be cleared. Some corresponding functionality is accessible in native tools or the command toolbox. They remain shortcut-compatibility gaps.
+- Shift+N (Component Colors), Shift+J (As-built Joint), Shift+S (Scripts/Add-ins), selection modes 1/2/3, and shell toggles for comments/data panel/text commands remain reserved. Pressing a reserved key shows a status message. Reserved rows are labeled in preferences and can be cleared. Ctrl+Alt+V, Ctrl+Alt+N, and Ctrl+[ / Ctrl+] are implemented as described above.
 - Shift for midpoint coincidence is a transient sketch modifier, not a standalone action. Fission preserves FreeCAD's native sketch constraints; exact Fusion inference behavior is not implemented.
-- Autodesk's current default reference lists no Create Sketch, Finish Sketch, Revolve, Chamfer, Shell, or Pattern key. These commands are available through toolbar/search; customizable defaults remain blank rather than inventing Fusion shortcuts.
+- Autodesk's current default reference lists no Create Sketch, Finish Sketch, Revolve, Chamfer, Shell, or Pattern key. These commands and Stitch are available through toolbar/search; their customizable defaults remain blank.
 - Ctrl++ and Ctrl+- in that reference belong to Autodesk Assistant, not the CAD canvas. Fission does not claim them as canvas defaults.
-- Mesh/Form, simulation, generative design, animation, electronics, and manufacturing-specific shortcuts are outside the initial profile. FreeCAD's native tools remain available according to installed modules.
+- The factory table does not provide specialist Surface, Mesh, or CAM operation keys. Those native commands support custom bindings in their contexts. Form, simulation, generative design, animation, and electronics do not have a Fission workflow in this release.
 - Autodesk's current references do not specify wheel sign, drag sensitivity, or the default orbit constraint type precisely enough to claim exact numerical parity. Fission navigation retains configurable zoom reversal and native navigation alternatives. Autodesk documents [reverse zoom preferences](https://help.autodesk.com/view/fusion360/ENU/?caas=caas/sfdcarticles/sfdcarticles/How-to-reverse-the-scroll-direction-for-zoom-in-Fusion-360.html), [free/constrained orbit](https://help.autodesk.com/cloudhelp/ENU/Fusion-GetStarted/files/GS-NAVIGATION-BAR.htm), and [orbit-center controls](https://help.autodesk.com/view/fusion360/ENU/?caas=caas/sfdcarticles/sfdcarticles/How-to-reset-the-orbit-pivot-point-in-Fusion-360.html).
 
 ## Source verification and tests
@@ -73,4 +81,8 @@ Command IDs were checked against `upstream-src/src/Mod/Sketcher/Gui/CommandCreat
 
 Run `python -m unittest discover -s tests -p test_shortcuts.py -v` for deterministic factory mapping, context reuse, typing-state resolver, collision detection, Classic bypass, save/load, reset, JSON atomicity, custom catalog bindings, and toolbox search tests. Qt focus and modeling invocation require the packaged GUI smoke tests; a pure resolver test alone is not evidence that every native command completed its operation.
 
-For real Qt event tests, set `FISSION_QT_TESTS=1` and `QT_QPA_PLATFORM=offscreen`, then run the same command with the LibPack Python runtime. This runs 28 tests, including three-preset selection and persistence, legacy profile migration, dispatch through real Qt key events, stock-action collision/restoration, lazy action registration, typing in four native editor kinds, reserved-key handling, preferences rendering, and keyboard command search. The execution spy in these Qt tests verifies dispatched IDs; geometry completion remains the responsibility of native CAD workflow smoke tests.
+For real Qt event tests, set `FISSION_QT_TESTS=1` and `QT_QPA_PLATFORM=offscreen`, then run the same command with the LibPack Python runtime. These cover three-preset selection and persistence, legacy profile migration, dispatch through real Qt key events, stock-action collision/restoration, lazy action registration, typing in native editors, reserved-key handling, preferences rendering, and keyboard command search. The execution spy verifies dispatched IDs; geometry completion requires native CAD workflow tests.
+
+Run `scripts/test-gui.ps1` against the built or staged application for modeling and restart persistence. Use `scripts/test-gui.ps1 -WorkspacesOnly` for the serial Drawing, Manufacture, workspace cycling, and navigation-control suite. The expanded modeling runner also exercises the actual Stitch dialog with whole-object and face selections, tolerance editing, Cancel/OK, Undo/Redo, and FCStd save/reopen.
+
+On October 4, 2026, the integrated native GUI suite passed all 30 cases, including Drawing/CAM operations, Assembly insertion and joints, Stitch, and real Qt events for workspace cycling and cube/navigation-strip controls. Separate processes verified persisted settings after restart. This is selected-tool acceptance; broader catalog commands and custom shortcuts still need native operation coverage. Check FISSION_STATUS.md and the generated JSON reports and completion markers for the tested build.

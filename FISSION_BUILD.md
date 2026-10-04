@@ -20,7 +20,7 @@ its command-line companion is `FissionCmd.exe`.
 checkout is stored in `upstream-src`. Applying Fission creates branch
 `codex/fission-engine` and retains the FreeCAD remote as `upstream`. Engine
 version 27.1 and its document compatibility rules are preserved; the Fission
-presentation has its own Alpha 0.1 label.
+presentation has its own 0.2 Alpha label.
 
 Requirements are Windows x64, Git, PowerShell, curl, a Windows SDK, and Visual
 Studio C++ Build Tools with CMake and Ninja. Allow at least 25 GB of free space
@@ -70,18 +70,23 @@ and compilation logs are in `build/windows-release/configure.log` and `build.log
 Downloaded dependencies, engine checkout, build outputs, and packages are ignored
 by the Fission root repository.
 
-`patches/0001-fission-identity-navigation.patch` contains native executable
-identity, resources, navigation, dock startup migration, and document task ownership
-changes. `patches/0002-upstream-test-gil.patch`
+`patches/0001-fission-identity-navigation.patch` contains 21 native source
+adaptations for executable identity, resources, navigation, dock startup
+migration, document task ownership, Assembly shell retention and Python wrapper
+registration, safe GUI observer construction, and contextual task-panel lifetime.
+TaskView preserves document-owned solver panels when operation dialogs close,
+and Assembly uses a Qt `QPointer` for its solver panel. These changes keep native
+task and solver behavior inside the shared shell. `patches/0002-upstream-test-gil.patch`
 repairs four upstream StringHasher tests that call the Python API after engine
 initialization releases the GIL. It changes test code only. Patch application is
 idempotent and leaves the original source notices intact.
 
 Pinned Part Design source files use CRLF. Patch application uses
-`--ignore-space-change` to match context while retaining that source format;
-all 15 native adaptations were validated against fresh pinned source blobs.
-Every expected adaptation applied and its normalized contents matched the
-generated result; failed hunks are not ignored.
+`--ignore-space-change` to match context while retaining that source format.
+All 21 current source adaptations passed deterministic generation, fresh pinned
+baseline application, normalized byte comparison with the live engine, and
+reverse checking. Evidence is in `test-output/assembly-patch-validation.json`.
+Repeat this validation when changing the patch; failed hunks are not ignored.
 
 ## Validation
 
@@ -95,6 +100,9 @@ generated result; failed hunks are not ignored.
 # Native presentation, integrated modeling/browser/history/shortcuts, then
 # separate process settings writer/reader against a persisted profile.
 .\scripts\test-gui.ps1
+
+# Target just the native Drawing/CAM editors and workspace/navigation controls.
+.\scripts\test-gui.ps1 -WorkspacesOnly -OutputDirectory test-output\workspaces
 
 # Full upstream Python app suite, for a separate extended run.
 .\scripts\test-upstream.ps1 -SkipCpp -PythonSuite 0
@@ -133,35 +141,64 @@ uses explicit user configuration files, checks completion markers and exit
 codes, and restores its temporary environment. Integrated JSON reports, native
 logs, FCStd/STEP/STL files, and screenshots are saved in `test-output`.
 
-The final branded engine passed all 26 CTest executables, all 903 selected core
-Python tests (one skip), and all 13 native CAD smoke assertions. Engine branding
-keeps its original version fields: overriding them with Alpha 0.1 was found to
-trigger legacy color restoration and version-migration test failures, so the
-Alpha label is confined to presentation.
+On October 4, 2026, the branded engine passed all 26 CTest executables. Both the
+build-tree run and the final installed portable run passed 30/30 native GUI
+cases, followed by passing persistence writer and reader processes. Primary
+delivery evidence is in `test-output/iteration-portable/smoke-results.json` and
+`test-output/iteration-portable/persistence-report.json`; the earlier build-tree
+results remain in `test-output/iteration-full-8`.
+The integrated cases cover native feature preview/OK/Cancel/Undo, active component
+scoping, Browser/Timeline, Qt shortcuts, camera input, selected Drawing/CAM
+editors, Surface/Mesh geometry and files with live catalog checks, Assembly
+insert/Fixed/Revolute joints/solver/external links, and actual Stitch dialogs.
+The portable Assembly case records 241 real before-change observer calls using
+the native derived view-provider binding, restores an inactive insertion task's
+solver panel, and survives native Cancel. Installed-runtime checks also passed
+13 command-line geometry cases and all nine required native workbenches, with
+module/resource paths and a rendered solid verified from the stage.
+This is selected-tool coverage; every specialist ribbon command, joint type,
+machining operation, and post processor has not received GUI acceptance.
+
+The October 3, 2026, prior Alpha run passed 903 selected core Python tests (one
+skip) and 13 native CAD smoke assertions. Those dated results do not imply a
+passing full upstream Python suite. Engine branding keeps its original version
+fields: overriding them with Alpha 0.1 was found to trigger legacy color
+restoration and version-migration test failures, so the Alpha label is confined
+to presentation.
 
 ## Portable package and matching source
 
-After final native, CAD, and integrated GUI/persistence checks pass:
+The verified 0.2 stage is
+`dist/0.2.0-alpha/staging/20261004-012143-745`. It passed native GUI/restart and
+installed-runtime checks, 13 geometry cases, and nine workbench activations.
+`verification/portable-gui-report.json`, `verification/cad/report.json`,
+`stage-manifest.json`, and `source-verification.json` retain installed-path,
+geometry, native-byte, and applied-source evidence. The stage verifies 509
+native paths, including 46 `lib` aliases, and 17,822 source files: 17,755 engine
+files and 67 Fission files. The earlier 0.1 delivery is preserved outside
+`dist/0.2.0-alpha`.
+
+Use the following procedure to stage, verify, and generate the final archives:
 
 ```powershell
 # Stage native runtime, notices, and the matching applied source first.
-.\scripts\package.ps1 -StageOnly
+.\scripts\package.ps1 -StageOnly -OutputDirectory dist\0.2.0-alpha
 
 # Use the stage path printed above. This launches the staged native GUI too.
-.\scripts\test-portable.ps1 -RuntimeDirectory '.\dist\staging\<stage>\Fission'
+.\scripts\test-portable.ps1 -RuntimeDirectory '.\dist\0.2.0-alpha\staging\<stage>\Fission'
 
 # Refresh UI/docs/source in that stage and create the final archives.
-.\scripts\package.ps1 -ReuseStageDirectory '.\dist\staging\<stage>'
+.\scripts\package.ps1 -OutputDirectory dist\0.2.0-alpha -ReuseStageDirectory '.\dist\0.2.0-alpha\staging\<stage>'
 ```
 
 The script runs the configured CMake install target into a fresh directory under
-`dist/staging`, installs Fission UI files, includes root notices and dependency
+`OutputDirectory/staging`, installs Fission UI files, includes root notices and dependency
 licenses/SBOM, and produces:
 
-- `dist/Fission-Alpha-Windows-x64.zip`, containing the complete portable runtime.
-- `dist/Fission-Alpha-source.zip`, containing the exact applied Fission/FreeCAD
+- `dist/0.2.0-alpha/Fission-Alpha-Windows-x64.zip`, containing the complete portable runtime.
+- `dist/0.2.0-alpha/Fission-Alpha-source.zip`, containing the exact applied Fission/FreeCAD
   source and recursive submodule files, patches, scripts, and notices.
-- `dist/package-manifest.json`, recording source pin, patch hashes, executable
+- `dist/0.2.0-alpha/package-manifest.json`, recording presentation version, source pin, patch hashes, executable
   hash, archive hashes/sizes, and staging location.
 
 LibPack's generated installer contains absolute dependency destinations. Packaging
@@ -177,11 +214,15 @@ native application itself with a fresh profile before distribution; loading only
 the build-tree application does not verify installed module/resource paths.
 This is an unsigned portable alpha; no signed installer is produced.
 
-`-ReuseStageDirectory` is restricted to an immediate child of `dist/staging`.
+`-ReuseStageDirectory` is restricted to an immediate child of `OutputDirectory/staging`.
 It refreshes the native executable/shared libraries, Fission UI, root documentation,
 and the applied source snapshot, then verifies the executable matches the build.
-Native DLL/PYD files in both `bin` and `Mod` are copied and individually hashed,
-including `Mod/PartDesign/PartDesignGui.pyd` after native task ownership changes.
+Native DLL/PYD files in `bin` and `Mod` are copied and individually hashed,
+including `Mod/PartDesign/PartDesignGui.pyd` and native Assembly bindings.
+Installed aliases under `lib` are refreshed from matching current native build
+files and hashed too. Unrelated LibPack dependencies are preserved; conflicting
+native binaries sharing an installed filename are rejected. This prevents an
+old alias from bypassing the refreshed `bin` or `Mod` copy when a stage is reused.
 CMake installation repeats only if essential runtime dependencies are missing. Archive
 creation repeats the command-line geometry smoke; `test-portable.ps1` also checks
 the installed GUI's home/resource paths, the actual Fission module file path,

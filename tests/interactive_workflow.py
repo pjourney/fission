@@ -220,6 +220,18 @@ def run(controller, settle):
         buttons = [button for button in controller.buttons
                    if button.property("fissionCommand") == "Fission_CreateSketch"
                    and button.isVisible() and button.isEnabled()]
+        if len(buttons) != 1:
+            import json
+            diagnostics = {
+                "tab": controller._tab, "context": controller.context(), "active": controller.active,
+                "activation_pending": controller._activation_pending, "ribbon_visible": controller.ribbon_dock.isVisible(),
+                "native_active": Gui.Command.get("PartDesign_NewSketch").isActive(),
+                "wrapper_active": Gui.Command.get("Fission_CreateSketch").isActive(),
+                "pending_transaction": doc.HasPendingTransaction,
+                "buttons": [{"enabled": button.isEnabled(), "visible": button.isVisible(), "text": button.text()}
+                            for button in controller.buttons if button.property("fissionCommand") == "Fission_CreateSketch"],
+            }
+            App.Console.PrintMessage("CREATE SKETCH DIAGNOSTICS " + json.dumps(diagnostics) + "\n")
         cad.require(len(buttons) == 1, "The real Create Sketch ribbon command must be enabled")
         QtTest.QTest.mouseClick(buttons[0], QtCore.Qt.LeftButton)
         settle(240)

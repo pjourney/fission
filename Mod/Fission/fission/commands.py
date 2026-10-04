@@ -40,6 +40,11 @@ COMMANDS = {
     "ToggleBrowser": ("Browser", None, "Std_TreeSelection", "structure panel", "all"),
     "ToggleTimeline": ("Timeline", None, "Std_HistoryBack", "history panel", "all"),
     "ResetLayout": ("Reset Layout", None, "Std_DlgCustomize", "panels default", "all"),
+    "ToggleViewCube": ("View Cube", None, "Std_ViewIsometric", "orientation cube show hide", "all"),
+    "ToggleNavigation": ("Navigation Bar", None, "Std_ViewFitAll", "navigation controls show hide", "all"),
+    "PreviousWorkspace": ("Previous Workspace", None, "Std_HistoryBack", "design drawing manufacture previous", "all"),
+    "NextWorkspace": ("Next Workspace", None, "Std_HistoryForward", "design drawing manufacture next", "all"),
+    "Stitch": ("Stitch", None, "Surface_Filling", "sew join surfaces shell", "surface"),
     "AssemblyJoint": ("Joint", "Assembly_CreateJointFixed", "Assembly_CreateJointFixed", "constraint rigid fixed", "assembly"),
     "NewComponent": ("New Component", None, "Std_Part", "part product", "model"),
 }
@@ -77,7 +82,7 @@ class FissionCommand:
     def GetResources(self):
         title, backend, icon, aliases, context = COMMANDS[self.name]
         return {"MenuText": title, "ToolTip": title + " — " + aliases,
-                "Pixmap": icon, "CmdType": "NoTransaction ForEdit" if context == "sketch" or self.name in ("Extrude", "Cut") else "NoTransaction"}
+                "Pixmap": icon, "CmdType": "NoTransaction ForEdit" if context in ("sketch", "assembly") or self.name in ("Extrude", "Cut", "ToggleViewCube", "ToggleNavigation", "PreviousWorkspace", "NextWorkspace") else "NoTransaction"}
 
     def Activated(self):
         from .shell import get_controller
@@ -85,12 +90,23 @@ class FissionCommand:
 
     def IsActive(self):
         title, backend, icon, aliases, context = COMMANDS[self.name]
-        if self.name in ("NewDesign", "Search", "Preferences", "About", "ToggleBrowser", "ToggleTimeline", "ResetLayout"):
+        if self.name in ("NewDesign", "Search", "Preferences", "About", "ToggleBrowser", "ToggleTimeline", "ResetLayout", "ToggleNavigation", "PreviousWorkspace", "NextWorkspace"):
             return True
         if not App.ActiveDocument:
             return False
+        if self.name == "CreateSketch":
+            document = Gui.activeDocument()
+            return bool(document and not document.getInEdit()
+                        and not App.ActiveDocument.HasPendingTransaction and not Gui.Control.activeDialog())
         if self.name in ("Move", "NewComponent") and App.ActiveDocument.HasPendingTransaction:
             return False
+        if self.name == "Stitch":
+            doc = Gui.activeDocument()
+            if App.ActiveDocument.HasPendingTransaction or Gui.Control.activeDialog() or (doc and doc.getInEdit()):
+                return False
+            selected = Gui.Selection.getSelection()
+            return bool(selected) and all(obj.Document is App.ActiveDocument and obj.isDerivedFrom("Part::Feature")
+                                          and not obj.Shape.isNull() for obj in selected)
         if self.name in ("Extrude", "Cut"):
             doc = Gui.activeDocument()
             edit = doc.getInEdit() if doc else None
@@ -112,7 +128,14 @@ def catalog():
             continue
         cmd = Gui.Command.get(cmd_id)
         info = cmd.getInfo()
+        context = "all"
+        for prefixes, workspace in (("Sketcher_", "sketch"), ("Assembly_", "assembly"),
+                                    ("TechDraw_", "drawing"), (("CAM_", "Path_"), "cam"),
+                                    ("Surface_", "surface"), ("Mesh_", "mesh")):
+            if cmd_id.startswith(prefixes):
+                context = workspace
+                break
         result.append(dict(id=cmd_id, title=info.get("menuText", cmd_id).replace("&", ""),
                            aliases=cmd_id.replace("_", " "), icon=info.get("pixmap", ""),
-                           context="sketch" if cmd_id.startswith("Sketcher_") else "all"))
+                           context=context))
     return result

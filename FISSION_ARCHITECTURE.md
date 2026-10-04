@@ -1,8 +1,9 @@
-# Fission architecture
+# Fission 0.2 Alpha architecture
 
-Fission builds the pinned FreeCAD C++ application with a small identity/navigation
-patch and installs a native Qt Design workbench. It is a desktop CAD application,
-not a web shell or a simulated geometry editor.
+Fission `0.2.0-alpha` builds the pinned FreeCAD C++ application with a small
+identity/navigation patch and a shared native Qt shell for Design, Drawing,
+and Manufacture. Product labels use **Fission 0.2 Alpha**. The engine retains
+its upstream version for document migrations and FCStd compatibility.
 
 ## Core and presentation boundary
 
@@ -24,6 +25,31 @@ editors occupy the right Tasks panel; native property editing remains available.
 New designs contain a real App::Part component and PartDesign::Body; activating
 another component changes native active containers rather than a synthetic model.
 
+## Workspaces and layout
+
+The selector and Ctrl+[ / Ctrl+] cycle through Design, Drawing, and Manufacture.
+Design uses `FissionWorkbench`; Drawing uses `TechDrawWorkbench`; Manufacture
+uses `CAMWorkbench` (`PathWorkbench` is the compatibility fallback). The shared
+controller, ribbon, Browser, document label, theme, shortcut dispatcher, and
+navigation strip remain active in these workspaces. Native task editors and
+document views continue to belong to their native modules. Other workbenches
+restore their normal native chrome when the Fission shell deactivates.
+
+Design exposes Solid, Surface, Mesh, Assemble, and Utilities tools, plus Sketch
+while an actual sketch is being edited. Sheet Metal appears only when its
+addon commands are already registered. Drawing groups native sheet creation,
+views, dimensions, annotations, and exports. Manufacture groups native jobs,
+tools, milling operations, verification, and post processing. These invoke real
+TechDraw and CAM document objects and task editors. Availability follows the
+installed modules, active document, selection, and current task state.
+
+Timeline is available only in Design. The controller saves Qt dock states as
+`Layout_Design`, `Layout_Drawing`, and `Layout_Manufacture` under
+`User parameter:BaseApp/Preferences/Fission`; the older `Layout` remains a
+Design fallback. Window `Geometry` is shared. Layout restoration runs after
+the native main window restores its own state. Workspace changes are refused
+while a native task or modeling transaction is active.
+
 ## Browser and Timeline
 
 `browser.py` presents real containment (`Group`, `Origin`, body children) with
@@ -40,6 +66,11 @@ Feature and datum task dialogs are explicitly attached to their object's
 document, so editing history cannot bind a panel to another open document.
 PartDesign editors keep the Design workspace active while using native preview,
 OK, Cancel and Undo behavior.
+Native Assembly editing also retains Design. Its registered Python view-provider
+wrapper exposes native document-provider methods. TaskView keeps document-owned
+contextual solver panels after an operation dialog's OK/Cancel and shows them
+for their document; Assembly holds the solver panel through a Qt `QPointer` so
+deferred widget deletion cannot leave a dangling pointer.
 Native errors/touched states, suppressed features, active edits and body tips
 are shown. Origin/container objects are excluded from modeling history.
 
@@ -49,11 +80,34 @@ dependency conflicts, but drag reordering stays disabled because legality also
 depends on body topology, feature support and native sequential-model semantics.
 The UI explains the limitation and never rewrites the dependency graph.
 
+## Surface and Mesh adapters
+
+Surface tools expose native filling, boundary/section surfaces, ruled surfaces,
+blend curves, extension, and subtraction. `fission/surface.py` supplies
+`Fission_Stitch`: its Qt tolerance dialog creates an actual `Surface::Sewing`
+feature with native `ShapeList` links to selected faces/shapes. Recompute uses
+the upstream sewing implementation; successful creation and source visibility
+changes form one Undo transaction. Cancel creates no feature, and invalid
+results abort the transaction. Stitch produces a sewn shape or shell; it does
+not imply that an open set of faces encloses a solid. **Convert to Solid** is a
+separate native Part operation for a closed shell. Shell construction, shape
+refinement, and geometry checking remain separate native tools.
+
+Mesh import, tessellation, smoothing, reduction, normal repair, hole filling,
+and export use native Mesh/MeshPart implementations. Mesh-to-shape conversion
+uses native Part's conversion dialog; its Sew option must be enabled when a
+closed shell is required. Solid conversion is a subsequent step. These native
+mesh/B-rep conversions create static geometry; Fission does not add synthetic
+parametric history or hide the distinction between meshes and solids.
+
 ## Input and navigation
 
 `shortcuts.py` provides a pure profile model and Qt event-filter dispatcher.
 Factory Fission / Fusion wins over colliding native QAction shortcuts. Context
-switching resolves Sketch, Model, Assembly and configured Drawing bindings.
+switching resolves `model`, `sketch`, `assembly`, `surface`, `mesh`, `drawing`,
+and `cam`. Sketch follows actual edit state; Drawing and CAM follow the native
+workbench; Surface/Mesh/Assembly follow the active Design tab. Measure (I),
+Compute (Ctrl+B), Appearance (A), and Move (M) retain Surface/Mesh mappings.
 Typing in line/text/numeric editors keeps standard editing behavior. Classic
 restores original actions. Custom edits, conflict checking, individual/all reset,
 JSON import/export and disk persistence use Fission's parameter namespace.
@@ -66,11 +120,66 @@ The native `Gui::FissionNavigationStyle` adapts the pinned upstream CAD navigati
 implementation, retaining camera mathematics, selection, editing and SpaceMouse
 paths. MMB pans; Shift+MMB orbits; Ctrl+Shift+MMB drag-zooms; wheel zooms. FreeCAD's
 existing orientation cube remains clickable and original. Native presets remain
-selectable. Branding uses original SVG assets and a generated Windows icon.
+selectable. F6 fits the native view. Ctrl+Alt+V updates the native orientation
+cube visibility in open 3D views and persists `ShowNaviCube`. Ctrl+Alt+N toggles
+the Fission navigation strip and persists `ShowNavigation`. These are display
+controls; they do not replace camera or selection behavior. Wheel reversal and
+native navigation alternatives remain configurable in preferences. Retaining
+SpaceMouse code paths is distinct from validating device hardware and its SDK
+in a particular build. Branding uses original SVG assets and a generated
+Windows icon.
 
 Fission disables native overlay docks on first launch and restores its Qt dock
 state after the native main window finishes restoring its own settings. This
 keeps Browser, Timeline and Tasks stable across startup and workspace changes.
+
+## Validation
+
+Pure profile/history tests and optional offscreen Qt tests cover presentation
+rules, persistence, and event dispatch. `scripts/test-gui.ps1` runs the native
+modeling and restart suites; `-WorkspacesOnly` runs serial workspace acceptance.
+`tests/workspace_workflows.py` exercises native TechDraw and CAM editors and
+exports. `tests/specialist_workflows.py` creates real Surface and Mesh models,
+tests save/reopen and interchange, and exposes the actual GUI Stitch
+accept/cancel/Undo/Redo case to the serial runner. Its App-only cases can run
+under `FissionCmd.exe` with `FISSION_SPECIALIST_AUTORUN=1`.
+
+Native acceptance for the new 0.2 workspace, Stitch, cube, and navigation-strip
+controls was exercised on October 4, 2026. The targeted workspace run passed
+native TechDraw page/projection editing with SVG/PDF exports, CAM Job/Profile
+editing with generated toolpath preview, workspace keyboard cycling, and native
+cube/navigation-strip visibility controls. The actual Stitch dialog passed
+Cancel and OK with whole-object and face selections, editable tolerance, six
+native source links, closed-shell geometry, Undo/Redo, and FCStd save/reopen.
+
+The App-only specialist cases passed native Surface::Filling boundary edits and
+Surface::Sewing recompute/solid conversion, and native mesh tessellation,
+mesh-to-shape/solid conversion, open-mesh rejection, and file roundtrips. These
+results cover selected workflows. They do not establish GUI completion for
+every Surface, Mesh, Drawing, or CAM ribbon tool. The final integrated GUI run
+passed all 30 cases, including native Assembly insertion, Fixed/Revolute joint
+task panels, J dispatch, solver alignment, Browser reactivation, contextual
+solver-panel restoration, and external-link save/reopen. Separate writer and
+reader processes passed persisted appearance, shortcuts, navigation, cube/strip
+visibility, geometry, and dock layout checks. Current scope and report paths
+are recorded in FISSION_STATUS.md.
+
+The final installed portable runtime also passed all 30 native GUI cases and
+both restart phases. Its Assembly case recorded 241 real before-change GUI
+observer calls through the native derived binding, restored an inactive
+insertion task's solver panel, and survived Cancel. Installed-runtime acceptance
+passed 13 command-line geometry checks, all nine required native workbenches,
+installed module/resource paths, and a rendered native solid. Primary delivery
+evidence is in `test-output/iteration-portable` and the verified stage's
+`verification` directory.
+
+Packaging refreshes and hashes native DLL/PYD copies in `bin` and `Mod` together
+with their installed `lib` aliases. The verified 0.2 stage covers 509 native
+paths, including 46 such aliases, and 17,822 matching applied-source files
+(17,755 engine and 67 Fission). Final archive generation refreshes the matching
+source/documentation, repeats independent command-line geometry checks, tests
+both ZIPs, and records their hashes in the package manifest. The prior 0.1
+delivery is preserved.
 
 ## Source and upstream updates
 
@@ -78,7 +187,11 @@ The independent Fission repository retains origin at pjourney/fission and an
 upstream FreeCAD remote. `source-lock.json` pins the recursive engine checkout.
 The ignored `upstream-src` has its own upstream remote and codex/fission-engine
 branch. `patches/0001-fission-identity-navigation.patch` contains reviewable engine
-adaptations; installer copies the original Fission executable icon separately.
+adaptations across 21 source files, including document-owned TaskView contextual
+panels and Assembly's `QPointer` solver-panel lifetime guard. Deterministic
+generation, application to fresh pinned source, normalized byte comparison,
+and reverse checking passed for all 21 adaptations. The installer
+copies the original Fission executable icon separately.
 Fission UI changes remain isolated under Mod/Fission. No geometry-kernel changes
 are made and no changes are submitted upstream.
 

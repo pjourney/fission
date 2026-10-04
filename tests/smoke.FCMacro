@@ -66,6 +66,7 @@ class SmokeReport:
 def settle(milliseconds=110):
     QtWidgets.QApplication.processEvents()
     QtTest.QTest.qWait(milliseconds)
+    QtCore.QCoreApplication.sendPostedEvents(None, QtCore.QEvent.DeferredDelete)
 
 
 def selected_names():
@@ -197,10 +198,23 @@ def component_body_context_case(controller):
                     "Component2 must have no active Body before actual Create Sketch")
         undo_before_sketch = native.UndoCount
         Gui.Selection.clearSelection()
+        solid = [index for index in range(controller.tabs.count()) if controller.tabs.tabText(index) == "SOLID"]
+        cad.require(len(solid) == 1, "Component workflow must expose its actual SOLID tab")
+        controller.tabs.setCurrentIndex(solid[0])
         controller.refresh_context()
         buttons = [button for button in controller.buttons
                    if button.property("fissionCommand") == "Fission_CreateSketch"
                    and button.isVisible() and button.isEnabled()]
+        if len(buttons) != 1:
+            App.Console.PrintMessage("COMPONENT SKETCH DIAGNOSTICS " + json.dumps({
+                "tab": controller._tab, "context": controller.context(), "active": controller.active,
+                "activation_pending": controller._activation_pending, "ribbon_visible": controller.ribbon_dock.isVisible(),
+                "native_active": Gui.Command.get("PartDesign_NewSketch").isActive(),
+                "wrapper_active": Gui.Command.get("Fission_CreateSketch").isActive(),
+                "pending_transaction": native.HasPendingTransaction, "edit": repr(Gui.getDocument(native.Name).getInEdit()),
+                "dialog": repr(Gui.Control.activeDialog()),
+                "buttons": [{"enabled": button.isEnabled(), "visible": button.isVisible()}
+                            for button in controller.buttons if button.property("fissionCommand") == "Fission_CreateSketch"]}) + "\n")
         cad.require(len(buttons) == 1, "Empty-component Create Sketch must expose an enabled real ribbon command")
         QtTest.QTest.mouseClick(buttons[0], QtCore.Qt.LeftButton)
         settle(250)
@@ -518,6 +532,24 @@ def run_fission_smoke():
         report.case("FCStd save reopen and expression/dimension recompute", persistence)
         report.case("STEP and watertight STL export and reimport", lambda: cad.export_and_reimport(doc, report.output))
         report.case("Existing upstream FCStd geometry and topology roundtrip", lambda: cad.upstream_compatibility(REPO, report.output))
+
+        import workspace_workflows
+        report.case("Native Drawing page, projection task and SVG/PDF export",
+                    lambda: workspace_workflows.drawing(controller, settle, report.output))
+        report.case("Native Manufacture Job, Profile editor and generated toolpath preview",
+                    lambda: workspace_workflows.manufacture(controller, settle, report.output))
+        report.case("Native Surface creation, solid conversion and file roundtrips with live ribbon catalog",
+                    lambda: workspace_workflows.specialist(controller, settle, report.output, "surface"))
+        report.case("Native Mesh tessellation, repair boundary validation and solid/file conversion with live ribbon catalog",
+                    lambda: workspace_workflows.specialist(controller, settle, report.output, "mesh"))
+        import assembly_workflow
+        report.case("Native Assembly insert, J fixed joint, revolute joint, solver and external-link file roundtrip",
+                    lambda: assembly_workflow.run(controller, settle, report.output / "assembly"))
+        import specialist_workflows
+        report.case("Native Surface Stitch dialog Cancel OK tolerance solid creation Undo Redo and file roundtrip",
+                    lambda: specialist_workflows.run_stitch(controller, settle, report.output / "stitch"))
+        report.case("Workspace keyboard cycling, task guard and native cube/navigation visibility controls",
+                    lambda: workspace_workflows.navigation_controls(controller, settle, report.output))
         App.setActiveDocument(doc.Name)
         controller.refresh_context()
         settle()
@@ -593,6 +625,7 @@ def run_fission_smoke():
         report.case("Isolated settings, custom shortcut export/import and panel toggles", settings_persistence)
 
         def screenshot():
+            controller.main.statusBar().clearMessage()
             controller.browser.refresh()
             controller.timeline.refresh()
             Gui.Selection.clearSelection()

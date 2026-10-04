@@ -17,6 +17,9 @@ $buildExecutable = Join-Path $BuildDirectory 'bin\Fission.exe'
 if (-not (Test-Path -LiteralPath $buildExecutable)) { throw 'Build the branded Fission.exe before packaging.' }
 if (-not (Test-Path -LiteralPath $sevenZip)) { throw 'Run setup-dependencies.ps1 before packaging.' }
 $sourceLock = Get-Content -LiteralPath (Join-Path $projectRoot 'source-lock.json') -Raw | ConvertFrom-Json
+$presentationSource = Get-Content -LiteralPath (Join-Path $projectRoot 'Mod\Fission\fission\__init__.py') -Raw
+$presentationVersion = [regex]::Match($presentationSource, '__version__ = "([^"]+)"').Groups[1].Value
+if (-not $presentationVersion) { throw 'Fission presentation version could not be read.' }
 if ((& git -C $engineRoot rev-parse HEAD) -ne $sourceLock.revision) { throw 'Engine revision does not match source-lock.json.' }
 
 New-Item -ItemType Directory -Force -Path $OutputDirectory | Out-Null
@@ -75,18 +78,40 @@ $nativeBuildFiles = @(
 )
 $buildDirectoryFull = (Resolve-Path -LiteralPath $BuildDirectory).Path
 $nativeHashes = [ordered]@{}
+$nativeByName = @{}
 foreach ($nativeFile in $nativeBuildFiles) {
     $relativeNativePath = $nativeFile.FullName.Substring($buildDirectoryFull.Length + 1)
     $stagedNativeFile = Join-Path $runtimeStage $relativeNativePath
-    if ($ReuseStageDirectory) {
-        New-Item -ItemType Directory -Force -Path (Split-Path $stagedNativeFile -Parent) | Out-Null
-        Copy-Item -LiteralPath $nativeFile.FullName -Destination $stagedNativeFile -Force
-    }
+    # Some native targets install to bin while the build loads a copy from Mod.
+    # Populate both paths on fresh stages as well as refreshed stages.
+    New-Item -ItemType Directory -Force -Path (Split-Path $stagedNativeFile -Parent) | Out-Null
+    Copy-Item -LiteralPath $nativeFile.FullName -Destination $stagedNativeFile -Force
     $nativeHash = (Get-FileHash -LiteralPath $nativeFile.FullName -Algorithm SHA256).Hash
     if ((Get-FileHash -LiteralPath $stagedNativeFile -Algorithm SHA256).Hash -ne $nativeHash) {
         throw "Staged native module differs from build: $relativeNativePath"
     }
     $nativeHashes[$relativeNativePath.Replace('\', '/')] = $nativeHash
+    if ($nativeByName.ContainsKey($nativeFile.Name) -and $nativeByName[$nativeFile.Name].Hash -ne $nativeHash) {
+        throw "Conflicting native binaries share an installed filename: $($nativeFile.Name)"
+    }
+    $nativeByName[$nativeFile.Name] = @{ Path = $nativeFile.FullName; Hash = $nativeHash }
+}
+# Native CMake module targets also install aliases under lib. Refresh those
+# aliases when reusing a stage, while preserving unrelated LibPack dependencies.
+$installedLibraryRoot = Join-Path $runtimeStage 'lib'
+if (Test-Path -LiteralPath $installedLibraryRoot -PathType Container) {
+    foreach ($installedLibrary in Get-ChildItem -LiteralPath $installedLibraryRoot -File -Recurse) {
+        if ($installedLibrary.Extension -notin @('.dll', '.pyd') -or -not $nativeByName.ContainsKey($installedLibrary.Name)) {
+            continue
+        }
+        $currentLibrary = $nativeByName[$installedLibrary.Name]
+        Copy-Item -LiteralPath $currentLibrary.Path -Destination $installedLibrary.FullName -Force
+        if ((Get-FileHash -LiteralPath $installedLibrary.FullName -Algorithm SHA256).Hash -ne $currentLibrary.Hash) {
+            throw "Installed native alias differs from build: $($installedLibrary.FullName)"
+        }
+        $relativeAliasPath = $installedLibrary.FullName.Substring($runtimeStage.Length + 1).Replace('\', '/')
+        $nativeHashes[$relativeAliasPath] = $currentLibrary.Hash
+    }
 }
 if ((Get-FileHash -LiteralPath (Join-Path $runtimeStage 'bin\Fission.exe') -Algorithm SHA256).Hash -ne
     (Get-FileHash -LiteralPath $buildExecutable -Algorithm SHA256).Hash) {
@@ -108,8 +133,8 @@ $documentationRoot = Join-Path $projectRoot 'docs'
 if (Test-Path -LiteralPath $documentationRoot -PathType Container) {
     Copy-Item -LiteralPath $documentationRoot -Destination $runtimeStage -Recurse -Force
 }
-@'
-Fission Alpha for Windows x64
+@"
+Fission $presentationVersion for Windows x64
 
 Extract the complete Fission folder, then open bin\Fission.exe.
 Keep bin, Mod, Ext, data, and licenses together. No FreeCAD installation is needed.
@@ -118,7 +143,7 @@ See FISSION_SHORTCUTS.md for modeling and navigation controls.
 The corresponding source is provided in Fission-Alpha-source.zip. Original
 FreeCAD and dependency copyrights and licenses are retained in NOTICE.md and
 licenses. This alpha is an unsigned portable application.
-'@ | Set-Content -LiteralPath (Join-Path $runtimeStage 'START_HERE.txt') -Encoding utf8
+"@ | Set-Content -LiteralPath (Join-Path $runtimeStage 'START_HERE.txt') -Encoding utf8
 Copy-Item -LiteralPath (Join-Path $engineRoot 'LICENSE') -Destination (Join-Path $licenseRoot 'FreeCAD-LICENSE')
 $componentLicenseTarget = Join-Path $licenseRoot 'LibPack-components'
 $qtSbomTarget = Join-Path $licenseRoot 'Qt-SBOM'
@@ -206,6 +231,7 @@ the runtime licenses/manifest.json, component licenses, and Qt SBOM files.
 if ($LASTEXITCODE -ne 0) { throw 'Staged source snapshot differs from the current applied source.' }
 
 $stageManifest = [ordered]@{
+    presentationVersion = $presentationVersion
     stageDirectory = $stageParent
     runtimeDirectory = $runtimeStage
     sourceDirectory = $sourceStage
@@ -249,6 +275,7 @@ $stagedExecutable = Join-Path $runtimeStage 'bin\Fission.exe'
 $buildHash = (Get-FileHash -LiteralPath $buildExecutable -Algorithm SHA256).Hash
 if ((Get-FileHash -LiteralPath $stagedExecutable -Algorithm SHA256).Hash -ne $buildHash) { throw 'Packaged executable differs from the built executable.' }
 $packageManifest = [ordered]@{
+    presentationVersion = $presentationVersion
     createdUtc = (Get-Date).ToUniversalTime().ToString('o')
     platform = 'Windows x64'
     archiveIntegrityVerified = $true
