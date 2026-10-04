@@ -13,7 +13,8 @@ if "fission" not in sys.modules:
     package = types.ModuleType("fission")
     package.__path__ = [str(PACKAGE)]
     sys.modules["fission"] = package
-from fission.shortcuts import (ShortcutProfile, DEFAULT_PROFILE, CLASSIC_PROFILE,
+from fission.shortcuts import (ShortcutProfile, DEFAULT_PROFILE, CLASSIC_PROFILE, CUSTOM_PROFILE,
+                              PROFILE_NAMES, PROFILE_SCHEMA_VERSION,
                               normalize_shortcut, contexts_overlap)
 from fission.search import rank_commands
 
@@ -87,6 +88,8 @@ class ShortcutTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.profile.reset_one("Sketcher_CreateLine")
         self.profile.reset()
+        self.assertEqual(self.profile.name, DEFAULT_PROFILE)
+        self.assertEqual(self.profile.overrides, {})
         self.assertEqual(self.profile.resolve("L", "sketch")["command"], "Sketcher_CreateLine")
 
     def test_round_trip_settings(self):
@@ -98,8 +101,68 @@ class ShortcutTests(unittest.TestCase):
         reopened.load(parameters)
         self.assertEqual(reopened.name, CLASSIC_PROFILE)
         self.assertEqual(reopened.overrides, {"Fission_Fillet":"Ctrl+F"})
-        reopened.name = DEFAULT_PROFILE
+        reopened.name = CUSTOM_PROFILE
         self.assertEqual(reopened.resolve("Ctrl+F")["command"], "Fission_Fillet")
+
+    def test_factory_and_classic_preserve_custom_preset(self):
+        self.profile.set_binding("Fission_Extrude", "Ctrl+E")
+        self.assertEqual(self.profile.name, CUSTOM_PROFILE)
+        self.profile.name = DEFAULT_PROFILE
+        self.assertEqual(self.profile.resolve("E")["command"], "Fission_Extrude")
+        self.assertIsNone(self.profile.resolve("Ctrl+E"))
+        self.profile.name = CLASSIC_PROFILE
+        self.assertIsNone(self.profile.resolve("E"))
+        self.profile.name = CUSTOM_PROFILE
+        self.assertEqual(self.profile.resolve("Ctrl+E")["command"], "Fission_Extrude")
+        self.assertIsNone(self.profile.resolve("E"))
+
+    def test_active_custom_preset_survives_restart(self):
+        parameters = Parameters()
+        self.profile.set_binding("Fission_Fillet", "Ctrl+F")
+        self.profile.save(parameters)
+        reopened = ShortcutProfile()
+        reopened.load(parameters)
+        self.assertEqual(reopened.name, CUSTOM_PROFILE)
+        self.assertEqual(reopened.resolve("Ctrl+F")["command"], "Fission_Fillet")
+        self.assertIsNone(reopened.resolve("F"))
+        self.assertEqual(parameters.data["SchemaVersion"], str(PROFILE_SCHEMA_VERSION))
+
+    def test_factory_preset_survives_restart_with_saved_custom_keys(self):
+        parameters = Parameters()
+        self.profile.set_binding("Fission_Fillet", "Ctrl+F")
+        self.profile.name = DEFAULT_PROFILE
+        self.profile.save(parameters)
+        reopened = ShortcutProfile()
+        reopened.load(parameters)
+        self.assertEqual(reopened.name, DEFAULT_PROFILE)
+        self.assertEqual(reopened.resolve("F")["command"], "Fission_Fillet")
+        self.assertIsNone(reopened.resolve("Ctrl+F"))
+        reopened.name = CUSTOM_PROFILE
+        self.assertEqual(reopened.resolve("Ctrl+F")["command"], "Fission_Fillet")
+
+    def test_legacy_profile_migrates_active_edits_to_custom(self):
+        parameters = Parameters()
+        parameters.SetString("Profile", DEFAULT_PROFILE)
+        parameters.SetString("Overrides", '{"Fission_Fillet":"Ctrl+F"}')
+        self.profile.load(parameters)
+        self.assertEqual(self.profile.name, CUSTOM_PROFILE)
+        self.assertEqual(self.profile.resolve("Ctrl+F")["command"], "Fission_Fillet")
+        self.profile.import_data({"schema_version": 1, "profile": CLASSIC_PROFILE,
+                                  "overrides": {"Fission_Fillet": "Ctrl+F"}})
+        self.assertEqual(self.profile.name, CLASSIC_PROFILE)
+        self.assertEqual(self.profile.overrides, {"Fission_Fillet": "Ctrl+F"})
+
+    def test_inactive_custom_keys_still_get_conflict_checks(self):
+        self.profile.set_binding("Fission_Extrude", "Ctrl+E")
+        self.profile.name = DEFAULT_PROFILE
+        with self.assertRaises(ValueError):
+            self.profile.set_binding("Fission_Fillet", "Ctrl+E")
+        self.assertEqual(self.profile.name, DEFAULT_PROFILE)
+        saved = self.profile.export_data()
+        with self.assertRaises(ValueError):
+            self.profile.import_data({"schema_version": 2, "profile": DEFAULT_PROFILE,
+                                      "overrides": {"Fission_Fillet": "H"}})
+        self.assertEqual(self.profile.export_data(), saved)
 
     def test_json_import_is_atomic(self):
         self.profile.set_binding("Fission_Fillet", "Ctrl+F")
@@ -287,6 +350,53 @@ class NativeQtShortcutTests(unittest.TestCase):
         self.assertTrue(action.shortcut().isEmpty())
         self.manager.deactivate()
         self.assertEqual(action.shortcut().toString(), "S, L")
+
+    def test_custom_preset_dispatch_and_restart(self):
+        self.manager.set_binding("Fission_Extrude", "Ctrl+E")
+        self.assertEqual(self.manager.profile.name, CUSTOM_PROFILE)
+        self.assertEqual(self.native.shortcut().toString(), "E")
+        self.press(self.QtCore.Qt.Key_E, modifiers=self.QtCore.Qt.ControlModifier)
+        self.assertEqual(self.called, ["Fission_Extrude"])
+        self.manager.apply_profile(DEFAULT_PROFILE)
+        self.assertTrue(self.native.shortcut().isEmpty())
+        self.manager.deactivate()
+        self.manager = self.module.ShortcutManager(self.controller, self.main)
+        self.controller.shortcuts = self.manager
+        self.manager.apply_profile(self.manager.profile.name)
+        self.assertEqual(self.manager.profile.name, DEFAULT_PROFILE)
+        self.assertTrue(self.native.shortcut().isEmpty())
+        self.press(self.QtCore.Qt.Key_E)
+        self.assertEqual(self.called, ["Fission_Extrude", "Fission_Extrude"])
+        self.manager.apply_profile(CUSTOM_PROFILE)
+        self.assertEqual(self.native.shortcut().toString(), "E")
+        self.press(self.QtCore.Qt.Key_E, modifiers=self.QtCore.Qt.ControlModifier)
+        self.assertEqual(self.called[-1], "Fission_Extrude")
+        self.manager.apply_profile(CLASSIC_PROFILE)
+        self.press(self.QtCore.Qt.Key_E)
+        self.assertEqual(self.native_calls, ["E"])
+        self.manager.apply_profile(CUSTOM_PROFILE)
+        self.manager.reset_profile()
+        self.assertEqual(self.manager.profile.name, DEFAULT_PROFILE)
+        self.assertEqual(self.manager.profile.overrides, {})
+        self.assertTrue(self.native.shortcut().isEmpty())
+
+    def test_preferences_expose_three_presets_and_select_custom_on_edit(self):
+        self.manager.show_preferences()
+        dialog = self.manager._dialog
+        self.assertEqual(tuple(dialog.profile_combo.itemText(index)
+                               for index in range(dialog.profile_combo.count())), PROFILE_NAMES)
+        item = next(dialog.tree.topLevelItem(index)
+                    for index in range(dialog.tree.topLevelItemCount())
+                    if dialog.tree.topLevelItem(index).data(0, self.QtCore.Qt.UserRole) == "Fission_Extrude")
+        dialog.tree.setCurrentItem(item)
+        dialog.key_edit.setKeySequence(self.QtGui.QKeySequence("Ctrl+E"))
+        dialog._assign()
+        self.assertEqual(dialog.profile_combo.currentText(), CUSTOM_PROFILE)
+        dialog.profile_combo.setCurrentText(DEFAULT_PROFILE)
+        self.assertEqual(self.manager.shortcut_for("Fission_Extrude"), "E")
+        dialog.profile_combo.setCurrentText(CUSTOM_PROFILE)
+        self.assertEqual(self.manager.shortcut_for("Fission_Extrude"), "Ctrl+E")
+        dialog.close()
 
     def test_preferences_and_toolbox_keyboard(self):
         self.manager.show_preferences()

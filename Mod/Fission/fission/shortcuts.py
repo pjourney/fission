@@ -28,6 +28,9 @@ except ImportError:
 
 DEFAULT_PROFILE = "Fission / Fusion"
 CLASSIC_PROFILE = "FreeCAD Classic"
+CUSTOM_PROFILE = "Custom"
+PROFILE_NAMES = (DEFAULT_PROFILE, CLASSIC_PROFILE, CUSTOM_PROFILE)
+PROFILE_SCHEMA_VERSION = 2
 PARAMETER_PATH = "User parameter:BaseApp/Preferences/Fission/Shortcuts"
 RESOURCE_PATH = Path(__file__).resolve().parents[1] / "resources" / "shortcuts.json"
 
@@ -112,8 +115,14 @@ class ShortcutProfile:
                                   "category": "Additional Commands"})
             known.add(entry["id"])
 
-    def shortcut(self, row):
-        return self.overrides.get(row["id"], row.get("shortcut", ""))
+    def shortcut(self, row, custom=None):
+        """Return the active key, or explicitly inspect the saved Custom table."""
+        if custom is None:
+            if self.name == CLASSIC_PROFILE:
+                return ""
+            custom = self.name == CUSTOM_PROFILE
+        return (self.overrides.get(row["id"], row.get("shortcut", ""))
+                if custom else row.get("shortcut", ""))
 
     def conflicts(self, binding_id, shortcut):
         shortcut = normalize_shortcut(shortcut)
@@ -123,7 +132,7 @@ class ShortcutProfile:
         if not shortcut:
             return []
         return [other for other in self.bindings
-                if other["id"] != binding_id and self.shortcut(other) == shortcut
+                if other["id"] != binding_id and self.shortcut(other, custom=True) == shortcut
                 and contexts_overlap(row["contexts"], other["contexts"])]
 
     def set_binding(self, binding_id, shortcut):
@@ -133,6 +142,7 @@ class ShortcutProfile:
             raise ValueError("Shortcut already assigned in this context: " +
                              ", ".join(row["title"] for row in conflicts))
         self.overrides[binding_id] = shortcut
+        self.name = CUSTOM_PROFILE
 
     def reset_one(self, binding_id):
         row = next((item for item in self.bindings if item["id"] == binding_id), None)
@@ -143,6 +153,7 @@ class ShortcutProfile:
             raise ValueError("Default shortcut conflicts with: " +
                              ", ".join(other["title"] for other in conflicts))
         self.overrides.pop(binding_id, None)
+        self.name = CUSTOM_PROFILE
 
     def reset(self):
         self.overrides.clear()
@@ -150,7 +161,7 @@ class ShortcutProfile:
 
     def validate(self):
         for row in self.bindings:
-            shortcut = self.shortcut(row)
+            shortcut = self.shortcut(row, custom=True)
             normalize_shortcut(shortcut)
             if self.conflicts(row["id"], shortcut):
                 raise ValueError("Conflicting shortcut for " + row["title"])
@@ -167,13 +178,14 @@ class ShortcutProfile:
         return None
 
     def export_data(self):
-        return {"schema_version": 1, "profile": self.name, "overrides": dict(self.overrides)}
+        return {"schema_version": PROFILE_SCHEMA_VERSION,
+                "profile": self.name, "overrides": dict(self.overrides)}
 
     def import_data(self, data):
-        if not isinstance(data, dict) or data.get("schema_version") != 1:
-            raise ValueError("This is not a version 1 Fission shortcut profile.")
+        if not isinstance(data, dict) or data.get("schema_version") not in (1, PROFILE_SCHEMA_VERSION):
+            raise ValueError("This is not a supported Fission shortcut profile (version 1 or 2).")
         name = data.get("profile", DEFAULT_PROFILE)
-        if name not in (DEFAULT_PROFILE, CLASSIC_PROFILE):
+        if name not in PROFILE_NAMES:
             raise ValueError("Unknown shortcut profile.")
         overrides = data.get("overrides")
         if not isinstance(overrides, dict):
@@ -189,15 +201,20 @@ class ShortcutProfile:
         except ValueError:
             self.overrides = old_overrides
             raise
+        # Version 1 applied overrides under the factory name. Preserve those
+        # active edits while giving the factory preset its own meaning in v2.
+        if data["schema_version"] == 1 and name == DEFAULT_PROFILE and self.overrides:
+            name = CUSTOM_PROFILE
         self.name = name
 
     def load(self, parameters):
         raw = parameters.GetString("Overrides", "{}")
-        self.import_data({"schema_version": 1,
+        self.import_data({"schema_version": int(parameters.GetString("SchemaVersion", "1")),
                           "profile": parameters.GetString("Profile", DEFAULT_PROFILE),
                           "overrides": json.loads(raw)})
 
     def save(self, parameters):
+        parameters.SetString("SchemaVersion", str(PROFILE_SCHEMA_VERSION))
         parameters.SetString("Profile", self.name)
         parameters.SetString("Overrides", json.dumps(self.overrides, sort_keys=True))
 
@@ -251,7 +268,7 @@ class ShortcutManager(_QObject):
             self.profile.add_catalog(catalog())
 
     def apply_profile(self, name=DEFAULT_PROFILE):
-        if name not in (DEFAULT_PROFILE, CLASSIC_PROFILE):
+        if name not in PROFILE_NAMES:
             raise ValueError("Unknown shortcut profile.")
         self._restore_actions()
         if not self._active:
@@ -423,7 +440,7 @@ class ShortcutPreferences(_Dialog):
         self.setModal(True)
         layout = QtWidgets.QVBoxLayout(self)
         self.profile_combo = QtWidgets.QComboBox()
-        self.profile_combo.addItems([DEFAULT_PROFILE, CLASSIC_PROFILE])
+        self.profile_combo.addItems(list(PROFILE_NAMES))
         self.profile_combo.currentTextChanged.connect(self._profile_changed)
         layout.addWidget(self.profile_combo)
         self.filter_edit = QtWidgets.QLineEdit()
@@ -445,7 +462,8 @@ class ShortcutPreferences(_Dialog):
             button.clicked.connect(callback)
             assignment.addWidget(button)
         layout.addLayout(assignment)
-        self.message = QtWidgets.QLabel("Changes are saved immediately. Text entry keeps its normal editing keys.")
+        self.message = QtWidgets.QLabel("Assigning or clearing a key selects Custom. Changes are saved immediately. "
+                                       "Text entry keeps its normal editing keys.")
         self.message.setWordWrap(True)
         layout.addWidget(self.message)
         bottom = QtWidgets.QHBoxLayout()
