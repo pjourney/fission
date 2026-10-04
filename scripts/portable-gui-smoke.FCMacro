@@ -1,0 +1,72 @@
+"""Verify the installed native runtime without using the development module path."""
+import json
+import os
+from pathlib import Path
+
+import FreeCAD as App
+import FreeCADGui as Gui
+from PySide import QtCore, QtWidgets
+
+
+def verify_portable_gui():
+    output = Path(os.environ["FISSION_PORTABLE_TEST_OUTPUT"])
+    root = Path(os.environ["FISSION_PORTABLE_ROOT"]).resolve()
+    report = {"passed": False}
+    try:
+        from fission import shell
+        module_path = Path(shell.__file__).resolve()
+        if not module_path.is_relative_to(root):
+            raise AssertionError("Fission module loaded outside the staged runtime: " + str(module_path))
+        if not Path(App.getHomePath()).resolve().is_relative_to(root):
+            raise AssertionError("Native home path is outside the staged runtime")
+        if not Path(App.getResourceDir()).resolve().is_relative_to(root):
+            raise AssertionError("Native resource path is outside the staged runtime")
+        import Mesh
+        import Part
+        import PartDesignGui
+        import Sketcher
+        native_module_paths = {module.__name__: str(Path(module.__file__).resolve())
+                               for module in (Mesh, Part, PartDesignGui, Sketcher)}
+        if any(not Path(path).is_relative_to(root) for path in native_module_paths.values()):
+            raise AssertionError("A native CAD module loaded outside the staged runtime")
+        required = ["FissionWorkbench", "PartDesignWorkbench", "SketcherWorkbench", "PartWorkbench",
+                    "MeshWorkbench", "SurfaceWorkbench", "AssemblyWorkbench", "TechDrawWorkbench", "CAMWorkbench"]
+        available = Gui.listWorkbenches()
+        if missing := [name for name in required if name not in available]:
+            raise AssertionError("Missing installed workbenches: " + ", ".join(missing))
+        for name in required:
+            Gui.activateWorkbench(name)
+        Gui.activateWorkbench("FissionWorkbench")
+        controller = shell.get_controller()
+        if not controller.active:
+            raise AssertionError("Fission workspace is not active")
+        document = App.newDocument("PortableSmoke")
+        body = document.addObject("PartDesign::Body", "Body")
+        box = body.newObject("PartDesign::AdditiveBox", "Box")
+        box.Length, box.Width, box.Height = 20, 15, 8
+        body.Tip = box
+        body.ViewObject.Visibility = box.ViewObject.Visibility = True
+        document.recompute()
+        if not box.Shape.isValid() or abs(box.Shape.Volume - 2400) > 1e-6:
+            raise AssertionError("Installed native geometry kernel failed")
+        view = Gui.activeDocument().activeView()
+        view.viewAxonometric()
+        view.fitAll()
+        QtWidgets.QApplication.processEvents()
+        view.saveImage(str(output / "portable-viewport.png"), 1000, 700, "Current")
+        main_window = Gui.getMainWindow()
+        main_window.grab().save(str(output / "portable-window.png"))
+        report.update(passed=True, module_path=str(module_path), home_path=App.getHomePath(),
+                      resource_path=App.getResourceDir(), workbenches=required,
+                      native_module_paths=native_module_paths,
+                      engine_version=App.Version(), window_title=main_window.windowTitle(),
+                      qt_version=QtCore.qVersion(), volume_mm3=box.Shape.Volume)
+        App.closeDocument(document.Name)
+    except Exception as error:
+        report["error"] = repr(error)
+    finally:
+        (output / "portable-gui-report.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
+        QtCore.QTimer.singleShot(100, Gui.getMainWindow().close)
+
+
+QtCore.QTimer.singleShot(1800, verify_portable_gui)

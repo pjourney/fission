@@ -183,10 +183,16 @@ class Controller(QtCore.QObject):
             self.shortcuts.deactivate()
         for widget in (self.ribbon_dock, self.browser, self.timeline, self.nav_dock):
             widget.hide()
-        for toolbar, visible in self._saved_toolbar_visibility.items():
-            toolbar.setVisible(visible)
-        for dock, visible in self._saved_dock_visibility.items():
-            dock.setVisible(visible)
+        for saved in (self._saved_toolbar_visibility, self._saved_dock_visibility,
+                      self._properties_before_task):
+            # Native workbenches may delete/recreate docks and toolbars while
+            # active. Their Python wrappers can outlive the Qt objects.
+            for widget, visible in list(saved.items()):
+                try:
+                    widget.setVisible(visible)
+                except RuntimeError:
+                    pass  # native Qt object has already been deleted
+            saved.clear()
         self.main.setStyleSheet("")
 
     def hide_legacy_chrome(self):

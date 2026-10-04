@@ -15,8 +15,10 @@ included. Public documentation informs interaction mappings only.
   AddonManager, including Coin's own submodules. The source lock records commits.
 - FreeCAD's AI policy and contribution rules were inspected. This independent
   fork is AI-assisted; no upstream submission is authorized or performed.
-- Newly authored Fission presentation files are MIT licensed under the existing
-  repository LICENSE. Engine modifications retain their original licenses.
+- Newly authored Fission files identify their licenses with SPDX headers:
+  shell/workbench/build code uses the existing MIT repository license; Browser,
+  Timeline, history, search and shortcuts use LGPL as stated in each file.
+  Engine modifications retain their original licenses.
 
 ## Dependencies
 

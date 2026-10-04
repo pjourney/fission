@@ -1,0 +1,55 @@
+"""Launch-time native Qt/3D/workbench smoke test, then close automatically."""
+import json
+import os
+from pathlib import Path
+
+import FreeCAD as App
+import FreeCADGui as Gui
+from PySide import QtCore, QtWidgets
+
+
+def run_baseline_gui_smoke():
+    output = Path(os.environ["FISSION_GUI_SMOKE_OUTPUT"])
+    output.mkdir(parents=True, exist_ok=True)
+    try:
+        main_window = Gui.getMainWindow()
+        available = Gui.listWorkbenches()
+        required = ["PartDesignWorkbench", "SketcherWorkbench", "PartWorkbench", "MeshWorkbench", "SurfaceWorkbench", "AssemblyWorkbench", "TechDrawWorkbench", "CAMWorkbench"]
+        missing = [name for name in required if name not in available]
+        if missing:
+            raise AssertionError("Missing required workbenches: " + ", ".join(missing))
+        for name in required:
+            Gui.activateWorkbench(name)
+        Gui.activateWorkbench("PartDesignWorkbench")
+        doc = App.newDocument("BaselineGuiSmoke")
+        body = doc.addObject("PartDesign::Body", "Body")
+        box = body.newObject("PartDesign::AdditiveBox", "Box")
+        box.Length = 20
+        box.Width = 15
+        box.Height = 8
+        body.Tip = box
+        body.ViewObject.Visibility = True
+        box.ViewObject.Visibility = True
+        doc.recompute()
+        Gui.activeDocument().activeView().viewAxonometric()
+        Gui.activeDocument().activeView().fitAll()
+        QtWidgets.QApplication.processEvents()
+        Gui.activeDocument().activeView().saveImage(str(output / "baseline-viewport.png"), 1000, 700, "Current")
+        if not box.Shape.isValid() or not Gui.activeDocument().activeView():
+            raise AssertionError("Native CAD document or 3D viewport is invalid")
+        (output / "gui-report.json").write_text(json.dumps({
+            "passed": True,
+            "window_title": main_window.windowTitle(),
+            "qt_version": QtCore.qVersion(),
+            "workbenches": required,
+            "solid_volume_mm3": box.Shape.Volume,
+        }, indent=2), encoding="utf-8")
+        main_window.grab().save(str(output / "baseline-window.png"))
+        App.closeDocument(doc.Name)
+    except Exception as error:
+        (output / "gui-report.json").write_text(json.dumps({"passed": False, "error": repr(error)}, indent=2), encoding="utf-8")
+    finally:
+        QtCore.QTimer.singleShot(100, Gui.getMainWindow().close)
+
+
+QtCore.QTimer.singleShot(1500, run_baseline_gui_smoke)

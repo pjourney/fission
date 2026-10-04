@@ -1,0 +1,656 @@
+# SPDX-License-Identifier: LGPL-2.1-or-later
+"""Launch with Fission.exe -u test-output/user.cfg tests/smoke.FCMacro.
+
+Uses the application event loop and real CAD engine. No unattended dialogs.
+Reports, CAD roundtrips, exports and a native screenshot go to test-output.
+"""
+
+import importlib
+import json
+import os
+from pathlib import Path
+import sys
+import time
+import traceback
+
+import FreeCAD as App
+import FreeCADGui as Gui
+from PySide import QtCore, QtGui, QtWidgets
+try:
+    from PySide import QtTest
+except ImportError:
+    try:
+        QtTest = importlib.import_module("PySide6.QtTest")
+    except ImportError:
+        QtTest = importlib.import_module("PySide2.QtTest")
+
+REPO = Path(os.environ.get("FISSION_SOURCE_ROOT", r"C:\Users\juice_box_local\Desktop\fission")).resolve()
+sys.path.insert(0, str(REPO / "tests"))
+import cad_workflows as cad
+from fission.history import chronological_features, feature_state, object_key, supports_suppression
+from fission.shortcuts import CLASSIC_PROFILE, DEFAULT_PROFILE, ShortcutProfile
+
+
+class SmokeReport:
+    def __init__(self):
+        self.output = Path(os.environ.get("FISSION_TEST_OUTPUT", str(REPO / "test-output"))).resolve()
+        self.output.mkdir(parents=True, exist_ok=True)
+        self.results = []
+        self.started = time.time()
+        self.metadata = {"version": list(App.Version()), "executable_root": App.getHomePath(), "user_profile": App.ConfigGet("UserParameter")}
+
+    def case(self, name, function):
+        started = time.time()
+        try:
+            details = function()
+            row = {"name": name, "status": "passed", "seconds": round(time.time() - started, 3), "details": details}
+            App.Console.PrintMessage("FISSION SMOKE PASS: " + name + "\n")
+        except Exception as exc:
+            row = {"name": name, "status": "failed", "seconds": round(time.time() - started, 3), "error": str(exc), "traceback": traceback.format_exc()}
+            App.Console.PrintError("FISSION SMOKE FAIL: {}: {}\n{}\n".format(name, exc, row["traceback"]))
+        self.results.append(row)
+        self.write()
+        return row["status"] == "passed"
+
+    def write(self):
+        data = {"metadata": self.metadata, "elapsed_seconds": round(time.time() - self.started, 3), "passed": sum(row["status"] == "passed" for row in self.results), "failed": sum(row["status"] == "failed" for row in self.results), "cases": self.results}
+        (self.output / "smoke-results.json").write_text(json.dumps(data, indent=2, default=str) + "\n", encoding="utf-8")
+        lines = ["# Fission native smoke results", "", "Passed: {}. Failed: {}.".format(data["passed"], data["failed"]), "", "| Case | Result |", "| --- | --- |"]
+        lines.extend("| {} | {} |".format(row["name"], row["status"]) for row in self.results)
+        for row in self.results:
+            if row["status"] == "failed":
+                lines.extend(["", "## " + row["name"], "", row["error"], "", "```", row["traceback"], "```"])
+        (self.output / "smoke-report.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def settle(milliseconds=110):
+    QtWidgets.QApplication.processEvents()
+    QtTest.QTest.qWait(milliseconds)
+
+
+def selected_names():
+    return [obj.Name for obj in Gui.Selection.getSelection()]
+
+
+def keyboard_case(controller, doc, sketch=False):
+    require = cad.require
+    focus = controller.browser.tree
+    focus.setFocus(QtCore.Qt.OtherFocusReason)
+    settle()
+    require(QtWidgets.QApplication.focusWidget() is focus, "Browser must own real keyboard focus")
+    captured = []
+    real_execute = controller.execute
+    controller.execute = lambda command: captured.append(command)
+    try:
+        keys = [("L", "Sketcher_CreateLine"), ("R", "Sketcher_CreateRectangle"), ("C", "Sketcher_CreateCircle"), ("D", "Sketcher_Dimension")] if sketch else [("E", "Fission_Extrude"), ("F", "Fission_Fillet"), ("M", "Fission_Move"), ("I", "Fission_Measure")]
+        for character, expected in keys:
+            captured.clear()
+            QtTest.QTest.keyClick(focus, getattr(QtCore.Qt, "Key_" + character))
+            settle(25)
+            require(captured == [expected], "{} must dispatch exactly {}; received {}".format(character, expected, captured))
+        captured.clear()
+        controller.browser.filter.setFocus()
+        controller.browser.filter.clear()
+        QtTest.QTest.keyClicks(controller.browser.filter, "efmilrcd")
+        settle(25)
+        require(controller.browser.filter.text() == "efmilrcd", "Typing must reach the actual line editor")
+        require(captured == [], "Typing focus must not dispatch CAD tools")
+        controller.browser.filter.clear()
+    finally:
+        controller.execute = real_execute
+    return {"context": controller.context(), "keys": [character for character, expected in keys], "typing_guard": True}
+
+
+def stock_conflict_case(controller):
+    action_type = getattr(QtGui, "QAction", None) or QtWidgets.QAction
+    # FreeCAD can legitimately restore another owner of E (for example Equal
+    # Constraint or Exploded View). Qt rejects an ambiguous shortcut, so use an
+    # otherwise unclaimed factory key for this synthetic dispatch probe.
+    occupied = set()
+    for action in controller.main.findChildren(action_type):
+        original = controller.shortcuts._original_actions.get(action, action.shortcuts())
+        occupied.update(sequence.toString(QtGui.QKeySequence.PortableText).split(",")[0].strip().upper()
+                        for sequence in original)
+    shortcut_type = getattr(QtGui, "QShortcut", None) or getattr(QtWidgets, "QShortcut", None)
+    if shortcut_type:
+        occupied.update(shortcut.key().toString(QtGui.QKeySequence.PortableText).split(",")[0].strip().upper()
+                        for shortcut in controller.main.findChildren(shortcut_type))
+    probe_key = next((key for key in ("E", "F", "M", "I", "Q", "H", "S", "V", "F6")
+                      if key not in occupied), None)
+    cad.require(probe_key is not None, "A factory key without another native owner is required for the dispatch probe")
+    native = action_type("Native shortcut conflict probe", controller.main)
+    native.setObjectName("FissionSmokeNativeConflict")
+    native.setShortcut(QtGui.QKeySequence(probe_key))
+    native.setShortcutContext(QtCore.Qt.WindowShortcut)
+    controller.main.addAction(native)
+    calls = []
+    native.triggered.connect(lambda: calls.append("native"))
+    try:
+        controller.shortcuts.apply_profile(DEFAULT_PROFILE)
+        settle()
+        cad.require(native.isEnabled(), "The native QAction must remain enabled")
+        cad.require(not native.shortcuts(), "A colliding stock shortcut must be suppressed by the Fusion profile")
+        cad.require(len(controller.shortcuts._original_actions) > 1, "Loaded native FreeCAD actions must have their colliding shortcuts tracked")
+        tracked = dict(controller.shortcuts._original_actions)
+        controller.shortcuts.apply_profile(CLASSIC_PROFILE)
+        for action, original in tracked.items():
+            expected = [sequence.toString(QtGui.QKeySequence.PortableText) for sequence in original]
+            actual = [sequence.toString(QtGui.QKeySequence.PortableText) for sequence in action.shortcuts()]
+            cad.require(actual == expected, "Classic must restore {} shortcuts: expected {}, received {}".format(
+                action.objectName() or action.text(), expected, actual))
+        cad.require(native.isEnabled(), "Classic must preserve the native QAction's enabled state")
+        controller.browser.tree.setFocus()
+        settle(40)
+        cad.require(QtWidgets.QApplication.focusWidget() is controller.browser.tree, "Browser must own focus for native dispatch")
+        QtTest.QTest.keyClick(controller.browser.tree, getattr(QtCore.Qt, "Key_" + probe_key))
+        settle(40)
+        cad.require(calls == ["native"], "Classic must dispatch restored native key {}; received {}".format(probe_key, calls))
+        return {"native_enabled": native.isEnabled(), "classic_event_received": True,
+                "probe_key": probe_key, "restored_actions": len(tracked)}
+    finally:
+        controller.shortcuts.apply_profile(DEFAULT_PROFILE)
+        controller.main.removeAction(native)
+        native.deleteLater()
+
+
+def component_body_context_case(controller):
+    """Activation and actual Create Sketch must respect native component scope."""
+    cad.require(not Gui.Control.activeDialog(), "Component regression requires no unfinished native task")
+    previous_document = App.ActiveDocument.Name if App.ActiveDocument else None
+    native = App.newDocument("ComponentContext")
+    try:
+        first = native.addObject("App::Part", "Component1")
+        empty = native.addObject("App::Part", "Component2")
+        owned = native.addObject("PartDesign::Body", "Body1")
+        first.addObject(owned)
+        native.recompute()
+        settle(160)
+        view = Gui.getDocument(native.Name).activeView()
+        controller.browser.refresh()
+        controller.browser._activate(owned)
+        cad.require(view.getActiveObject("part") is first and view.getActiveObject("pdbody") is owned,
+                    "Activating a component Body must activate both its actual component and Body")
+        controller.browser._activate(empty)
+        cad.require(view.getActiveObject("part") is empty and view.getActiveObject("pdbody") is None,
+                    "Activating an empty component must clear the unrelated active Body")
+        before_ensure = native.UndoCount
+        cad.require(controller.ensure_body() is True, "Empty component must establish a ready native Body")
+        scoped = view.getActiveObject("pdbody")
+        cad.require(view.getActiveObject("part") is empty and scoped is not None
+                    and scoped is not owned and scoped.getParentGeoFeatureGroup() is empty,
+                    "ensure_body must create a Body in Component2 without selecting Component1's sole Body")
+        cad.require(native.UndoCount == before_ensure + 1,
+                    "Scoped Body creation must commit one real undo transaction")
+        # Undo only this test-created empty Body, leaving the two original
+        # components intact. The actual ribbon command must create its scoped
+        # Body itself while the only pre-existing Body belongs elsewhere.
+        scoped_name = scoped.Name
+        native.undo()
+        settle(100)
+        cad.require(native.getObject(scoped_name) is None and native.UndoCount == before_ensure,
+                    "Native Undo must remove only the test-created scoped empty Body")
+        cad.require(len([obj for obj in native.Objects if obj.isDerivedFrom("PartDesign::Body")]) == 1,
+                    "Create Sketch regression must start with exactly one unrelated native Body")
+        original_group = [obj.Name for obj in owned.Group]
+        controller.browser._activate(empty)
+        cad.require(view.getActiveObject("part") is empty and view.getActiveObject("pdbody") is None,
+                    "Component2 must have no active Body before actual Create Sketch")
+        undo_before_sketch = native.UndoCount
+        Gui.Selection.clearSelection()
+        controller.refresh_context()
+        buttons = [button for button in controller.buttons
+                   if button.property("fissionCommand") == "Fission_CreateSketch"
+                   and button.isVisible() and button.isEnabled()]
+        cad.require(len(buttons) == 1, "Empty-component Create Sketch must expose an enabled real ribbon command")
+        QtTest.QTest.mouseClick(buttons[0], QtCore.Qt.LeftButton)
+        settle(250)
+        dialog = Gui.Control.activeTaskDialog(Gui.getDocument(native.Name))
+        cad.require(dialog is not None, "Empty-component Create Sketch must open a document-owned native task")
+        new_bodies = [obj for obj in native.Objects
+                      if obj.isDerivedFrom("PartDesign::Body") and obj is not owned]
+        cad.require(len(new_bodies) == 1 and new_bodies[0].getParentGeoFeatureGroup() is empty,
+                    "Create Sketch in Component2 must create its own Body; actual bodies {}".format(
+                        [(obj.Name, obj.getParentGeoFeatureGroup().Name if obj.getParentGeoFeatureGroup() else None)
+                         for obj in native.Objects if obj.isDerivedFrom("PartDesign::Body")]))
+        created_body = new_bodies[0]
+        sketches = [obj for obj in created_body.Group if obj.isDerivedFrom("Sketcher::SketchObject")]
+        cad.require(len(sketches) == 1 and sketches[0].getParentGeoFeatureGroup() is created_body,
+                    "Create Sketch must place the actual Sketch inside Component2's new Body")
+        cad.require(view.getActiveObject("part") is empty and view.getActiveObject("pdbody") is created_body,
+                    "Native sketch creation must retain Component2 and activate its own Body")
+        cad.require([obj.Name for obj in owned.Group] == original_group,
+                    "Creating a sketch in Component2 must preserve Component1's object graph")
+        cad.require(Gui.activeWorkbench().name() == "FissionWorkbench",
+                    "Empty-component native sketch task must retain FissionWorkbench")
+        sketch_name = sketches[0].Name
+        body_name = created_body.Name
+        contents = [widget.metaObject().className() for widget in dialog.getDialogContent()]
+        dialog.reject()
+        settle(180)
+        cad.require(Gui.Control.activeTaskDialog(Gui.getDocument(native.Name)) is None
+                    and Gui.getDocument(native.Name).getInEdit() is None and not native.HasPendingTransaction,
+                    "Cancel must resolve the actual empty-component native task and transaction")
+        cad.require(native.getObject(sketch_name) is None,
+                    "Cancel must remove the uncommitted empty-component Sketch")
+        cad.require(native.getObject(body_name) is created_body
+                    and created_body.getParentGeoFeatureGroup() is empty,
+                    "Cancel must retain the separately committed empty Body inside Component2")
+        cad.require(native.UndoCount == undo_before_sketch + 1,
+                    "Cancel must retain exactly the scoped Body creation undo transaction")
+        cad.require([obj.Name for obj in owned.Group] == original_group,
+                    "Cancel must preserve Component1's original native object graph")
+
+        root_body = native.addObject("PartDesign::Body", "RootBody")
+        native.recompute()
+        controller.browser._activate(root_body)
+        cad.require(view.getActiveObject("part") is None and view.getActiveObject("pdbody") is root_body,
+                    "Activating a root Body must clear the stale active component")
+        cad.require(controller.ensure_body() is True, "Root Body must be ready for native modeling")
+        cad.require(view.getActiveObject("part") is None and view.getActiveObject("pdbody") is root_body,
+                    "ensure_body must retain the native root Body without a component")
+        controller.browser._activate(owned)
+        cad.require(view.getActiveObject("part") is first and view.getActiveObject("pdbody") is owned,
+                    "Returning to Body1 must restore both native activation objects")
+        return {"components": [first.Name, empty.Name], "sole_body_fallback_blocked": True,
+                "owned_body_activation": True, "root_body_activation": True,
+                "create_sketch_body": body_name, "create_sketch_owner": empty.Name,
+                "native_task_contents": contents, "cancel_removed_sketch": True,
+                "cancel_retained_scoped_body": True, "body_creation_undo_steps": 1}
+    finally:
+        App.setActiveDocument(native.Name)
+        gui_doc = Gui.getDocument(native.Name)
+        dialog = Gui.Control.activeTaskDialog(gui_doc)
+        if dialog is not None:
+            dialog.reject()
+            settle(120)
+        if gui_doc.getInEdit():
+            gui_doc.resetEdit()
+        if native.HasPendingTransaction:
+            native.abortTransaction()
+        App.closeDocument(native.Name)
+        if previous_document and previous_document in App.listDocuments():
+            App.setActiveDocument(previous_document)
+        Gui.Selection.clearSelection()
+        controller.refresh_context()
+        controller.browser.refresh()
+        controller.timeline.refresh()
+        settle(100)
+
+
+def camera_snapshot(view):
+    camera = view.getCameraNode()
+    return {"position": list(camera.position.getValue().getValue()), "orientation": list(view.getCameraOrientation().Q), "height": float(camera.height.getValue())}
+
+
+def differs(left, right, tolerance=1e-6):
+    return any(abs(a - b) > tolerance for a, b in zip(left, right))
+
+
+def gesture_case(controller, kind):
+    view = Gui.activeDocument().activeView()
+    view.setCameraType("Orthographic")
+    view.viewAxonometric()
+    view.fitAll()
+    settle(150)
+    viewport = view.graphicsView().viewport()
+    viewport.setFocus()
+    viewport.setMouseTracking(True)
+    start = QtCore.QPoint(viewport.width() // 2 + 50, viewport.height() // 2 + 35)
+    saved = view.getCamera()
+    before = camera_snapshot(view)
+    try:
+        if kind == "wheel":
+            wheel = QtGui.QWheelEvent(QtCore.QPointF(start), QtCore.QPointF(viewport.mapToGlobal(start)), QtCore.QPoint(0, 0), QtCore.QPoint(0, 120), QtCore.Qt.NoButton, QtCore.Qt.NoModifier, QtCore.Qt.NoScrollPhase, False)
+            # Quarter's event filter is installed on the graphics view. Real
+            # wheel events propagate there; a sendEvent to the GL viewport alone
+            # does not reproduce that Qt propagation.
+            QtWidgets.QApplication.sendEvent(view.graphicsView(), wheel)
+        else:
+            modifiers = QtCore.Qt.ShiftModifier if kind == "orbit" else (QtCore.Qt.ControlModifier | QtCore.Qt.ShiftModifier) if kind == "drag-zoom" else QtCore.Qt.NoModifier
+            QtTest.QTest.mousePress(viewport, QtCore.Qt.MiddleButton, modifiers, start)
+            for delta in (QtCore.QPoint(8, 5), QtCore.QPoint(28, 20), QtCore.QPoint(65, 42)):
+                point = start + delta
+                move = QtGui.QMouseEvent(QtCore.QEvent.MouseMove, QtCore.QPointF(point), QtCore.QPointF(viewport.mapToGlobal(point)), QtCore.Qt.NoButton, QtCore.Qt.MiddleButton, modifiers)
+                QtWidgets.QApplication.sendEvent(viewport, move)
+                settle(20)
+            QtTest.QTest.mouseRelease(viewport, QtCore.Qt.MiddleButton, modifiers, start + QtCore.QPoint(65, 42))
+        settle(100)
+        after = camera_snapshot(view)
+        if kind == "pan":
+            cad.require(differs(before["position"], after["position"]), "MMB drag must pan the camera position")
+            cad.require(not differs(before["orientation"], after["orientation"]), "Pan must preserve camera orientation")
+            cad.require(abs(before["height"] - after["height"]) < 1e-5, "Pan must preserve zoom")
+        elif kind == "orbit":
+            cad.require(differs(before["orientation"], after["orientation"]), "Shift+MMB must orbit the camera")
+            cad.require(abs(before["height"] - after["height"]) < 1e-5, "Orbit must preserve orthographic zoom")
+        else:
+            cad.require(abs(before["height"] - after["height"]) > 1e-5, "Zoom gesture must change the native camera height")
+            cad.require(not differs(before["orientation"], after["orientation"]), "Zoom must preserve camera orientation")
+        return {"navigation": view.getNavigationType(), "before": before, "after": after, "viewport": viewport.metaObject().className()}
+    finally:
+        view.setCamera(saved)
+        settle(60)
+
+
+def run_fission_smoke():
+    report = SmokeReport()
+    controller = None
+    doc = None
+    try:
+        profile = Path(App.ConfigGet("UserParameter")).resolve()
+        cad.require(profile.parent == report.output.resolve(), "Smoke tests require an isolated -u test-output/user.cfg profile")
+        Gui.activateWorkbench("FissionWorkbench")
+        from fission.shell import get_controller
+        controller = get_controller()
+        import fission.shell as installed_shell
+        report.metadata["fission_module"] = installed_shell.__file__
+        controller.main.showNormal()
+        controller.main.resize(1800, 1000)
+        controller.main.activateWindow()
+        controller.main.raise_()
+        settle(300)
+
+        def build_model():
+            nonlocal doc
+            doc = cad.create_workflow()
+            settle(150)
+            return {"base_sketch_dof": doc.BaseSketch.DoF, "hole_sketch_dof": doc.HoleSketch.DoF, "features": [obj.Name for obj in chronological_features(doc)], "final": cad.shape_signature(doc.Body.Shape)}
+        if not report.case("Fully constrained sketch, extrusion, fillet, hole and pattern", build_model):
+            return
+
+        def browser_history():
+            controller.browser.refresh()
+            controller.timeline.refresh()
+            controller.browser.tree.expandToDepth(3)
+            expected = ["BaseSketch", "Extrude", "CornerFillet", "HoleSketch", "Hole", "HolePattern"]
+            actual = [controller.timeline.list.item(index).data(QtCore.Qt.UserRole)[1] for index in range(controller.timeline.list.count())]
+            cad.require(actual == expected, "Timeline must show actual creation order without origin helpers")
+            cad.require(all(object_key(obj) in controller.browser._items for obj in doc.Objects), "Browser must include every real document object")
+            cad.require(controller.browser.isVisible() and controller.timeline.isVisible(), "Product Browser and Timeline must both be visible")
+            initial_item = controller.browser._items[object_key(doc.BaseSketch)]
+            controller.browser.refresh()
+            cad.require(controller.browser._items[object_key(doc.BaseSketch)] is initial_item, "An unchanged browser item must keep its identity")
+            return {"timeline": actual, "browser_objects": len(doc.Objects), "incremental_identity": True}
+        report.case("Browser and horizontal timeline model presentation", browser_history)
+
+        def selection_sync():
+            Gui.Selection.clearSelection()
+            Gui.Selection.addSelection(doc.Name, doc.CornerFillet.Name, "Face1")
+            settle()
+            cad.require(controller.browser._items[object_key(doc.CornerFillet)].isSelected(), "Native canvas face selection must highlight Browser")
+            cad.require(controller.timeline._items[object_key(doc.CornerFillet)].isSelected(), "Native canvas face selection must highlight Timeline")
+            controller.browser.tree.clearSelection()
+            controller.browser._items[object_key(doc.Hole)].setSelected(True)
+            settle()
+            cad.require(selected_names() == ["Hole"], "Browser selection must select native model object")
+            cad.require(controller.timeline._items[object_key(doc.Hole)].isSelected(), "Browser selection must reach Timeline")
+            controller.timeline.list.clearSelection()
+            controller.timeline._items[object_key(doc.HolePattern)].setSelected(True)
+            settle()
+            cad.require(selected_names() == ["HolePattern"], "Timeline selection must reach native model selection")
+            cad.require(controller.browser._items[object_key(doc.HolePattern)].isSelected(), "Timeline selection must reach Browser")
+            return {"native_face": "Face1", "browser_to_canvas": True, "timeline_to_canvas": True}
+        report.case("Canvas, Browser and Timeline selection synchronization", selection_sync)
+        report.case("Native QAction collisions and Classic restoration", lambda: stock_conflict_case(controller))
+        report.case("Real Qt model E F M I events and typing focus guard", lambda: keyboard_case(controller, doc))
+
+        def sketch_edit_keys():
+            item = controller.timeline._items[object_key(doc.BaseSketch)]
+            controller.timeline.list.scrollToItem(item)
+            settle()
+            point = controller.timeline.list.visualItemRect(item).center()
+            QtTest.QTest.mouseClick(controller.timeline.list.viewport(), QtCore.Qt.LeftButton, QtCore.Qt.NoModifier, point)
+            QtTest.QTest.mouseDClick(controller.timeline.list.viewport(), QtCore.Qt.LeftButton, QtCore.Qt.NoModifier, point)
+            settle(200)
+            edit = Gui.activeDocument().getInEdit()
+            cad.require(edit is not None and edit.Object.Name == "BaseSketch", "Timeline double-click must enter native sketch edit")
+            cad.require(controller.context() == "sketch", "Sketch contextual mode must activate")
+            details = keyboard_case(controller, doc, sketch=True)
+            controller.perform("FinishSketch")
+            settle(150)
+            cad.require(Gui.activeDocument().getInEdit() is None, "Finish Sketch must leave native edit mode")
+            cad.require(controller.context() == "model", "Finish Sketch must return to modeling context")
+            return details
+        report.case("Timeline double-click native sketch edit and L R C D events", sketch_edit_keys)
+        if Gui.activeDocument().getInEdit():
+            Gui.activeDocument().resetEdit()
+            Gui.Control.closeDialog()
+            settle()
+
+        def suppression():
+            cad.require(supports_suppression(doc.HolePattern), "Pattern must expose real native writable suppression")
+            before = cad.shape_signature(doc.Body.Shape)
+            try:
+                controller.timeline._toggle_suppression(doc.HolePattern)
+                settle()
+                cad.require(doc.HolePattern.Suppressed, "Native Suppressed property must change")
+                cad.require(doc.Body.Shape.Volume > before["volume"], "Suppressing hole pattern must restore removed material")
+                cad.require(controller.timeline._items[object_key(doc.HolePattern)].font().strikeOut(), "Suppression must be visible in Timeline")
+            finally:
+                if doc.HolePattern.Suppressed:
+                    controller.timeline._toggle_suppression(doc.HolePattern)
+                settle()
+                cad.require(not doc.HolePattern.Suppressed, "Native suppression must be reversible")
+                cad.compare_shapes(before, cad.shape_signature(doc.Body.Shape))
+            return {"native_property": "Suppressed", "volume_restored": True}
+        report.case("Native suppression changes geometry and restores it", suppression)
+
+        def broken_feature():
+            before = cad.shape_signature(doc.Body.Shape)
+            length = float(doc.Extrude.Length)
+            try:
+                doc.Extrude.Length = 0
+                doc.recompute()
+                settle()
+                cad.require(feature_state(doc.Extrude)[0] == "error", "An invalid extrusion must surface an error state")
+                tooltip = controller.timeline._items[object_key(doc.Extrude)].toolTip()
+                cad.require(doc.Extrude.getStatusString() in tooltip, "Timeline tooltip must expose the real geometry error")
+                return {"error": doc.Extrude.getStatusString(), "tooltip": tooltip}
+            finally:
+                doc.Extrude.Length = length
+                doc.recompute()
+                settle()
+                cad.compare_shapes(before, cad.shape_signature(doc.Body.Shape))
+        report.case("Broken feature error indication and successful recompute repair", broken_feature)
+
+        def visibility_rename_undo():
+            obj = doc.HolePattern
+            original = obj.Label
+            controller.browser._transaction(obj, "Rename feature", lambda: setattr(obj, "Label", "Three drilled holes"))
+            settle()
+            cad.require(controller.browser._items[object_key(obj)].text(0) == "Three drilled holes", "Native rename must reach Browser")
+            cad.require("Three drilled holes" in controller.timeline._items[object_key(obj)].text(), "Native rename must reach Timeline")
+            doc.undo()
+            settle()
+            cad.require(obj.Label == original, "Native Undo must restore rename")
+            before = bool(obj.ViewObject.Visibility)
+            controller.browser._toggle_visibility(obj)
+            settle()
+            cad.require(obj.ViewObject.Visibility != before, "Browser visibility must update actual native view provider")
+            controller.browser._toggle_visibility(obj)
+            settle()
+            cad.require(obj.ViewObject.Visibility == before, "Visibility toggle must be reversible")
+            return {"undo_rename": True, "native_visibility": True}
+        report.case("Rename Undo and native visibility toggle", visibility_rename_undo)
+
+        def interactive_commands():
+            from interactive_workflow import run
+            return run(controller, settle)
+        report.case("Native Ctrl+N, Create Sketch, E Extrude, Timeline OK Cancel Undo and F Fillet panels", interactive_commands)
+
+        def reserved_document_name():
+            native = App.newDocument("document")
+            try:
+                feature = native.addObject("Part::Feature", "document")
+                feature.Shape = cad.Part.makeBox(5, 5, 5)
+                native.recompute()
+                controller.browser.refresh()
+                controller.timeline.refresh()
+                cad.require(controller.browser._object(object_key(feature)) is feature, "Document names must not be treated as reserved presentation nodes")
+                cad.require(object_key(feature) in controller.browser._items, "An object matching the document name must retain a separate Browser item")
+                cad.require(("document", native.Name, "root") in controller.browser._items, "Synthetic design root must have a distinct key")
+                return {"document_name": native.Name, "object_name": feature.Name, "distinct_root": True}
+            finally:
+                App.closeDocument(native.Name)
+                App.setActiveDocument(doc.Name)
+                controller.browser.refresh()
+                controller.timeline.refresh()
+        report.case("Browser handles document and object names matching presentation labels", reserved_document_name)
+        report.case("Native component and root Body activation scopes actual Create Sketch", lambda: component_body_context_case(controller))
+
+        def persistence():
+            nonlocal doc
+            doc = cad.save_and_reopen(doc, report.output / "machined-plate.FCStd")
+            previous_volume = doc.Body.Shape.Volume
+            doc.BaseSketch.setDatum(8, App.Units.Quantity("70 mm"))
+            doc.Extrude.Length = 12.0
+            doc.recompute()
+            cad.require(doc.BaseSketch.DoF == 0, "Edited dimension must keep sketch constrained")
+            cad.require(doc.Body.Shape.isValid() and doc.Body.Shape.Volume > previous_volume, "Dimension edits must recompute valid larger geometry")
+            require_bounds = doc.Extrude.Shape.BoundBox
+            cad.require(abs(require_bounds.XMin + 35) < 1e-6 and abs(require_bounds.XMax - 35) < 1e-6, "Width expressions must retain a centered sketch")
+            cad.require(abs(require_bounds.ZMax - 12) < 1e-6, "Extrusion edit must update height")
+            doc.save()
+            controller.browser.refresh()
+            controller.timeline.refresh()
+            settle()
+            return {"edited_width_mm": 70, "edited_length_mm": 12, "final": cad.shape_signature(doc.Body.Shape)}
+        report.case("FCStd save reopen and expression/dimension recompute", persistence)
+        report.case("STEP and watertight STL export and reimport", lambda: cad.export_and_reimport(doc, report.output))
+        report.case("Existing upstream FCStd geometry and topology roundtrip", lambda: cad.upstream_compatibility(REPO, report.output))
+        App.setActiveDocument(doc.Name)
+        controller.refresh_context()
+        settle()
+
+        for gesture, label in (("pan", "MMB pan"), ("orbit", "Shift+MMB orbit"), ("wheel", "Wheel zoom"), ("drag-zoom", "Ctrl+Shift+MMB drag zoom")):
+            report.case("Native viewport " + label, lambda gesture=gesture: gesture_case(controller, gesture))
+
+        def fit_event():
+            view = Gui.activeDocument().activeView()
+            view.setCameraType("Orthographic")
+            view.viewAxonometric()
+            view.fitAll()
+            camera = view.getCameraNode()
+            initial = float(camera.height.getValue())
+            camera.height = initial * 4
+            controller.browser.tree.setFocus()
+            settle(60)
+            QtTest.QTest.keyClick(controller.browser.tree, QtCore.Qt.Key_F6)
+            settle(140)
+            cad.require(float(camera.height.getValue()) < initial * 2, "F6 must run actual Fit command through Qt event dispatch")
+            return {"initial_height": initial, "fitted_height": float(camera.height.getValue())}
+        report.case("Actual F6 Fit command via Qt key event", fit_event)
+
+        def cube_navigation():
+            view = Gui.activeDocument().activeView()
+            view.getViewer().setEnabledNaviCube(True)
+            view.getViewer().setNaviCubeCorner(1)
+            view.setAnimationEnabled(False)
+            view.viewAxonometric()
+            settle(150)
+            before = list(view.getCameraOrientation().Q)
+            viewport = view.graphicsView().viewport()
+            point = QtCore.QPoint(viewport.width() - 66, 50)
+            QtTest.QTest.mouseMove(viewport, point)
+            settle(200)
+            view.saveImage(str(report.output / "cube-before-click.png"), viewport.width(), viewport.height(), "Current")
+            QtTest.QTest.mouseClick(viewport, QtCore.Qt.LeftButton, QtCore.Qt.NoModifier, point)
+            settle(600)
+            after = list(view.getCameraOrientation().Q)
+            cad.require(differs(before, after), "Clicking the native orientation cube must change camera orientation")
+            buttons = [button for button in controller.nav_dock.findChildren(QtWidgets.QToolButton) if button.property("fissionCommand") == "Std_ViewIsometric"]
+            cad.require(len(buttons) == 1, "Home navigation must expose its native command")
+            QtTest.QTest.mouseClick(buttons[0], QtCore.Qt.LeftButton)
+            settle(450)
+            cad.require(not differs(before, list(view.getCameraOrientation().Q)), "Home button must restore the isometric camera")
+            return {"cube_click": [point.x(), point.y()], "camera_changed": True, "home_restored": True}
+        report.case("Native orientation cube click and Home navigation button", cube_navigation)
+
+        def settings_persistence():
+            controller.shortcuts.set_binding("Fission_Extrude", "Ctrl+Shift+E")
+            file = report.output / "custom-shortcuts.json"
+            controller.shortcuts.export_profile(file)
+            loaded = ShortcutProfile()
+            loaded.load(controller.shortcuts.parameters)
+            cad.require(loaded.overrides.get("Fission_Extrude") == "Ctrl+Shift+E", "Custom shortcut must persist through actual ParamGet")
+            controller.shortcuts.reset_profile()
+            controller.shortcuts.import_profile(file)
+            cad.require(controller.shortcuts.profile.overrides.get("Fission_Extrude") == "Ctrl+Shift+E", "Export/import must restore custom shortcut")
+            controller.shortcuts.reset_profile()
+            controller.save_layout()
+            cad.require(bool(controller.settings.GetString("Layout", "")), "Native layout state must be persisted")
+            App.saveParameter()
+            cad.require(profile.is_file(), "Isolated user.cfg must be saved")
+            text = profile.read_text(encoding="utf-8")
+            cad.require("Fission" in text and "Layout" in text and "Shortcuts" in text, "Disk profile must contain Fission layout and shortcut parameters")
+            for name in ("ToggleBrowser", "ToggleTimeline"):
+                widget = controller.browser if name == "ToggleBrowser" else controller.timeline
+                visible = widget.isVisible()
+                controller.perform(name)
+                cad.require(widget.isVisible() != visible, "Dock toggle must change real visibility")
+                controller.perform(name)
+            return {"isolated_profile": str(profile), "exported_shortcuts": str(file), "layout_saved": True}
+        report.case("Isolated settings, custom shortcut export/import and panel toggles", settings_persistence)
+
+        def screenshot():
+            controller.browser.refresh()
+            controller.timeline.refresh()
+            Gui.Selection.clearSelection()
+            Gui.activeDocument().activeView().viewAxonometric()
+            Gui.activeDocument().activeView().fitAll()
+            Gui.activeDocument().activeView().redraw()
+            settle(300)
+            file = report.output / "fission-native-smoke.png"
+            view = Gui.activeDocument().activeView()
+            camera = view.getCameraNode()
+            report.metadata["camera_clip"] = {"position": list(camera.position.getValue().getValue()), "near": float(camera.nearDistance.getValue()), "far": float(camera.farDistance.getValue())}
+            # Orthographic orbit keeps the native focal distance near 1 for
+            # precision. Offscreen export does not run Coin's live auto clipping;
+            # move the eye outside the solid while preserving its focal point.
+            span = max(doc.Body.Shape.BoundBox.DiagonalLength, 1.0)
+            direction = view.getCameraOrientation().multVec(App.Vector(0, 0, 1))
+            position = App.Vector(*camera.position.getValue().getValue())
+            focal = position - direction * float(camera.focalDistance.getValue())
+            eye = focal + direction * (span * 2)
+            camera.position = (eye.x, eye.y, eye.z)
+            camera.focalDistance = span * 2
+            camera.nearDistance = span * 0.01
+            camera.farDistance = span * 4
+            viewport_file = report.output / "fission-native-viewport.png"
+            view.saveImage(str(viewport_file), 1200, 800, "Current")
+            cad.require(viewport_file.is_file() and viewport_file.stat().st_size > 15000, "Native CAD viewport must render geometry")
+            capture = controller.main.grab()
+            viewport = view.graphicsView().viewport()
+            canvas_file = report.output / "fission-native-canvas.png"
+            view.saveImage(str(canvas_file), viewport.width(), viewport.height(), "Current")
+            # QWidget.grab omits the separate native OpenGL framebuffer. Use
+            # the engine's native render at the actual canvas size and position.
+            painter = QtGui.QPainter(capture)
+            painter.drawImage(QtCore.QRect(viewport.mapTo(controller.main, QtCore.QPoint(0, 0)), viewport.size()), QtGui.QImage(str(canvas_file)))
+            painter.end()
+            cad.require(not capture.isNull() and capture.save(str(file)), "Native application screenshot must be saved")
+            report.metadata["mdi_views"] = [{"type": window.metaObject().className(), "name": window.objectName(), "title": window.windowTitle(), "visible": window.isVisible(), "maximized": window.isMaximized(), "geometry": [window.x(), window.y(), window.width(), window.height()]} for window in controller.main.findChild(QtWidgets.QMdiArea).subWindowList()]
+            report.metadata["visible_frames"] = [{"type": frame.metaObject().className(), "name": frame.objectName(), "geometry": [frame.x(), frame.y(), frame.width(), frame.height()]} for frame in controller.main.findChildren(QtWidgets.QFrame) if frame.isVisible() and frame.width() > 400 and frame.height() > 200]
+            report.metadata["visible_docks"] = [{"name": dock.objectName(), "title": dock.windowTitle(), "floating": dock.isFloating(), "geometry": [dock.x(), dock.y(), dock.width(), dock.height()]} for dock in controller.main.findChildren(QtWidgets.QDockWidget) if dock.isVisible()]
+            return {"file": str(file), "width": controller.main.width(), "height": controller.main.height()}
+        report.case("Native application screenshot", screenshot)
+    except Exception:
+        report.case("Smoke runner initialization", lambda: (_ for _ in ()).throw(RuntimeError(traceback.format_exc())))
+    finally:
+        report.write()
+        (report.output / "smoke-complete.txt").write_text("PASS\n" if all(row["status"] == "passed" for row in report.results) else "FAIL\n", encoding="utf-8")
+        if controller:
+            controller.save_layout()
+        for document_name in list(App.listDocuments()):
+            try:
+                gui_doc = Gui.getDocument(document_name)
+                if gui_doc and gui_doc.getInEdit():
+                    gui_doc.resetEdit()
+                    Gui.Control.closeDialog()
+                App.closeDocument(document_name)
+            except Exception:
+                App.Console.PrintWarning("Could not close test document " + document_name + "\n")
+        QtCore.QTimer.singleShot(250, QtWidgets.QApplication.instance().quit)
+
+
+QtCore.QTimer.singleShot(2000, run_fission_smoke)

@@ -10,9 +10,9 @@ $sourceLock = Get-Content -LiteralPath (Join-Path $projectRoot 'source-lock.json
 $revision = & git -C $SourceDirectory rev-parse HEAD
 if ($revision -ne $sourceLock.revision) { throw 'Engine revision differs from source-lock.json; review patches before updating.' }
 $patchFile = Join-Path $projectRoot 'patches\0001-fission-identity-navigation.patch'
-& git -C $SourceDirectory apply --reverse --check $patchFile 2>$null
+& git -C $SourceDirectory apply --ignore-space-change --reverse --check $patchFile 2>$null
 if ($LASTEXITCODE -ne 0) {
-    & git -C $SourceDirectory apply --check $patchFile
+    & git -C $SourceDirectory apply --ignore-space-change --check $patchFile
     if ($LASTEXITCODE -ne 0) { throw 'Engine patch does not apply cleanly.' }
     $branch = & git -C $SourceDirectory branch --show-current
     if ($branch -ne 'codex/fission-engine') {
@@ -20,8 +20,18 @@ if ($LASTEXITCODE -ne 0) {
         if ($LASTEXITCODE -ne 0) { throw 'Could not create Fission engine branch.' }
     }
     if ((& git -C $SourceDirectory remote) -notcontains 'upstream') { & git -C $SourceDirectory remote rename origin upstream }
-    & git -C $SourceDirectory apply $patchFile
+    & git -C $SourceDirectory apply --ignore-space-change $patchFile
     if ($LASTEXITCODE -ne 0) { throw 'Engine patch failed.' }
 }
 Copy-Item -LiteralPath (Join-Path $projectRoot 'Mod\Fission\resources\fission.ico') -Destination (Join-Path $SourceDirectory 'src\Main\icon.ico') -Force
+$testPatch = Join-Path $projectRoot 'patches\0002-upstream-test-gil.patch'
+if (Test-Path -LiteralPath $testPatch) {
+    & git -C $SourceDirectory apply --reverse --check $testPatch 2>$null
+    if ($LASTEXITCODE -ne 0) {
+        & git -C $SourceDirectory apply --check $testPatch
+        if ($LASTEXITCODE -ne 0) { throw 'Upstream test GIL patch does not apply cleanly.' }
+        & git -C $SourceDirectory apply $testPatch
+        if ($LASTEXITCODE -ne 0) { throw 'Upstream test GIL patch failed.' }
+    }
+}
 & (Join-Path $PSScriptRoot 'install-ui.ps1') -BuildDirectory $BuildDirectory
