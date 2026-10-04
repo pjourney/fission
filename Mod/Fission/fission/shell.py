@@ -52,7 +52,7 @@ TABS = {
     ],
     "UTILITIES": [
         ("INSPECT", ["Measure", ("Std_MassProperties", "Mass Properties"), ("Part_CheckGeometry", "Check Geometry")]),
-        ("PARAMETERS", [("Spreadsheet_CreateSheet", "Parameter Sheet"), "Compute", ("Std_DlgExpressionInput", "Expression")]),
+        ("PARAMETERS", [("Spreadsheet_CreateSheet", "Parameter Sheet"), "Compute"]),
         ("FILES", [("Std_Import", "Import"), ("Std_Export", "Export"), ("Std_Save", "Save")]),
         ("SETTINGS", ["Search", "Preferences", "About"]),
     ],
@@ -87,7 +87,7 @@ def command_icon(command):
     actions = cmd.getAction()
     if actions and not actions[0].icon().isNull():
         return actions[0].icon()
-    pixmap = cmd.getInfo().get("Pixmap", "")
+    pixmap = cmd.getInfo().get("pixmap", "")
     return QtGui.QIcon(pixmap if os.path.isfile(pixmap) else ":/icons/" + pixmap + ".svg")
 
 
@@ -113,10 +113,13 @@ class Controller(QtCore.QObject):
         self.settings = App.ParamGet("User parameter:BaseApp/Preferences/Fission")
         self.active = False
         self._context = None
+        self._keep_shortcuts = False
+        self._activation_pending = False
         self._tab = "SOLID"
         self.buttons = []
         self._saved_toolbar_visibility = {}
         self._saved_dock_visibility = {}
+        self._properties_before_task = {}
         self.main.setWindowIcon(QtGui.QIcon(ICON))
         self.create_ribbon()
         from .browser import Browser
@@ -145,22 +148,38 @@ class Controller(QtCore.QObject):
 
     def activate(self):
         self.active = True
+        self._keep_shortcuts = False
+        self.workspace.blockSignals(True)
+        self.workspace.setCurrentText("Design")
+        self.workspace.blockSignals(False)
         self.hide_legacy_chrome()
         theme.apply(self.main)
         for widget in (self.ribbon_dock, self.browser, self.timeline, self.nav_dock):
             widget.show()
-        self.restore_layout()
+        # FreeCAD restores its own main-window state after activating the first
+        # workbench. Apply our saved state once that native startup has finished.
+        if not self._activation_pending:
+            self._activation_pending = True
+            QtCore.QTimer.singleShot(0, self.complete_activation)
         self.shortcuts.apply_profile(self.shortcuts.profile.name)
         self.timer.start()
+        self.refresh_context()
+
+    def complete_activation(self):
+        self._activation_pending = False
+        if not self.active:
+            return
+        self.hide_legacy_chrome()
+        self.restore_layout()
         self.refresh_context()
         if not App.ActiveDocument:
             self.show_welcome()
 
     def deactivate(self):
-        self.active = False
         self.save_layout()
+        self.active = False
         self.timer.stop()
-        if hasattr(self.shortcuts, "deactivate"):
+        if not self._keep_shortcuts and hasattr(self.shortcuts, "deactivate"):
             self.shortcuts.deactivate()
         for widget in (self.ribbon_dock, self.browser, self.timeline, self.nav_dock):
             widget.hide()
@@ -321,6 +340,12 @@ class Controller(QtCore.QObject):
         self.main.splitDockWidget(self.nav_dock, self.timeline, QtCore.Qt.Vertical)
 
     def context(self):
+        workbench = Gui.activeWorkbench()
+        name = workbench.name() if workbench else ""
+        if name == "TechDrawWorkbench":
+            return "drawing"
+        if name in ("CAMWorkbench", "PathWorkbench"):
+            return "cam"
         doc = Gui.activeDocument()
         edit = doc.getInEdit() if doc else None
         if edit and edit.Object.isDerivedFrom("Sketcher::SketchObject"):
@@ -333,7 +358,24 @@ class Controller(QtCore.QObject):
         if not self.active:
             return
         doc = App.ActiveDocument
-        self.document_label.setText((doc.Label + (" *" if doc.UndoCount else "")) if doc else "Local parametric design")
+        gui_doc = Gui.getDocument(doc.Name) if doc else None
+        editing = bool(Gui.Control.activeDialog() or (gui_doc and gui_doc.getInEdit()))
+        for dock in self.main.findChildren(QtWidgets.QDockWidget):
+            if dock.objectName() == "Tasks":
+                if editing:
+                    if dock.isFloating():
+                        dock.setFloating(False)
+                    if self.main.dockWidgetArea(dock) != QtCore.Qt.RightDockWidgetArea:
+                        self.main.addDockWidget(QtCore.Qt.RightDockWidgetArea, dock)
+                    dock.setWindowTitle("Feature Parameters")
+                dock.setVisible(editing)
+            elif dock.objectName() in ("Property view", "Property editor"):
+                if editing:
+                    self._properties_before_task.setdefault(dock, dock.isVisible())
+                    dock.hide()
+                elif dock in self._properties_before_task:
+                    dock.setVisible(self._properties_before_task.pop(dock))
+        self.document_label.setText((doc.Label + (" *" if gui_doc and gui_doc.Modified else "")) if doc else "Local parametric design")
         ctx = self.context()
         if ctx != self._context:
             was_sketch = self._context == "sketch"
@@ -359,8 +401,9 @@ class Controller(QtCore.QObject):
             except RuntimeError:
                 pass  # deferred-deleted group button
         if doc and self.welcome:
-            self.welcome.close()
+            welcome = self.welcome
             self.welcome = None
+            welcome.close()
         if doc and Gui.activeDocument():
             view = Gui.activeDocument().activeView()
             if view and hasattr(view, "setNavigationType"):
@@ -369,11 +412,9 @@ class Controller(QtCore.QObject):
                     view.setNavigationType(desired)
 
     def prepare_sketch(self, obj):
-        try:
-            if obj.Document and obj.ViewObject and "EditingWorkbench" in obj.ViewObject.PropertiesList:
-                obj.ViewObject.EditingWorkbench = "FissionWorkbench"
-        except (RuntimeError, ReferenceError):
-            pass
+        # The native sketch adapter retains Design during setEdit. Never store
+        # a Fission-only workbench name in otherwise compatible FCStd files.
+        return
 
     def execute(self, command_id):
         try:
@@ -382,8 +423,18 @@ class Controller(QtCore.QObject):
                 self.notify("This tool is unavailable in this build: " + command_id)
                 return False
             if not cmd.isActive():
-                self.notify("Select the required geometry before using " + cmd.getInfo().get("MenuText", command_id))
+                self.notify("Select the required geometry before using " + cmd.getInfo().get("menuText", command_id))
                 return False
+            # Native QAction availability includes task-dialog ownership checks
+            # that Command.isActive alone omits. Sketch-to-solid is a deliberate
+            # transition handled transactionally by the Fission wrapper.
+            transitions = command_id in ("Fission_Extrude", "Fission_Cut") and self.context() == "sketch"
+            if not transitions and not command_id.startswith("Fission_"):
+                Gui.Command.update()
+                actions = cmd.getAction()
+                if actions and not any(action.isEnabled() for action in actions):
+                    self.notify("Finish or cancel the active operation before using this command.")
+                    return False
             Gui.runCommand(command_id)
             QtCore.QTimer.singleShot(0, self.refresh_context)
             return True
@@ -408,6 +459,9 @@ class Controller(QtCore.QObject):
                 Gui.Selection.clearSelection()
                 Gui.Selection.addSelection(obj)
             self.refresh_context()
+        elif name in ("Extrude", "Cut") and self.context() == "sketch":
+            self.perform("FinishSketch")
+            self.execute(COMMANDS[name][1])
         elif name == "Move":
             self.move_copy()
         elif name == "Search":
@@ -425,7 +479,7 @@ class Controller(QtCore.QObject):
                 "<h2>Fission 0.1 — Development build</h2><p>Local parametric mechanical design.</p>"
                 "<p>Fission is based on the FreeCAD open-source project.</p>"
                 "<p>FreeCAD's contributors retain their copyrights. Engine: LGPL 2.1 or later; "
-                "Fission presentation: MIT. See the bundled NOTICE and licenses.</p>"
+                "Fission presentation: MIT and LGPL, as identified in each source file. See the bundled NOTICE and licenses.</p>"
                 "<p>Independent project; no endorsement by FreeCAD or Autodesk.</p>")
         elif name == "EditFeature":
             selection = Gui.Selection.getSelection()
@@ -461,6 +515,9 @@ class Controller(QtCore.QObject):
 
     def new_component(self):
         doc = App.ActiveDocument or self.new_design()
+        if doc.HasPendingTransaction:
+            self.notify("Finish or cancel the active feature before creating a component.")
+            return
         doc.openTransaction("New component")
         component = doc.addObject("App::Part", "Component")
         component.Label = "Component %d" % len([o for o in doc.Objects if o.TypeId == "App::Part"])
@@ -495,13 +552,31 @@ class Controller(QtCore.QObject):
         if doc.getInEdit():
             self.notify("Finish or cancel the current feature before editing history.")
             return False
+        if obj.Document.HasPendingTransaction:
+            self.notify("Finish or cancel the current operation before editing history.")
+            return False
         Gui.Selection.clearSelection()
         Gui.Selection.addSelection(obj)
-        result = doc.setEdit(obj.Name)
+        # Native PartDesign double-click opens a transaction before showing its
+        # task editor. Keep the same commit/cancel semantics from the Timeline.
+        opened = not obj.isDerivedFrom("Sketcher::SketchObject")
+        if opened:
+            obj.Document.openTransaction("Edit " + obj.Label)
+        try:
+            result = doc.setEdit(obj.Name)
+            if result is False and opened:
+                obj.Document.abortTransaction()
+        except Exception:
+            if opened:
+                obj.Document.abortTransaction()
+            raise
         self.refresh_context()
         return result
 
     def move_copy(self):
+        if App.ActiveDocument and App.ActiveDocument.HasPendingTransaction:
+            self.notify("Finish or cancel the active feature before Move / Copy.")
+            return
         selected = Gui.Selection.getSelection()
         if not selected:
             self.notify("Select a component or body to Move / Copy.")
@@ -556,8 +631,10 @@ class Controller(QtCore.QObject):
 
     def switch_workspace(self, name):
         if name == "Drawing":
+            self._keep_shortcuts = True
             Gui.activateWorkbench("TechDrawWorkbench")
         elif name == "Manufacture":
+            self._keep_shortcuts = True
             Gui.activateWorkbench("CAMWorkbench" if "CAMWorkbench" in Gui.listWorkbenches() else "PathWorkbench")
 
     def save_layout(self):
@@ -621,7 +698,7 @@ class Controller(QtCore.QObject):
         outer.addSpacing(22)
         outer.addWidget(QtWidgets.QLabel("RECENT DOCUMENTS"))
         recent = App.ParamGet("User parameter:BaseApp/Preferences/RecentFiles")
-        paths = [value for kind, key, value in recent.GetContents() if key.startswith("MRU")]
+        paths = [value for kind, key, value in (recent.GetContents() or []) if key.startswith("MRU")]
         for path in paths[:8]:
             button = QtWidgets.QPushButton(os.path.basename(path))
             button.setToolTip(path)
@@ -633,4 +710,8 @@ class Controller(QtCore.QObject):
         self.welcome = mdi.addSubWindow(widget)
         self.welcome.setWindowTitle("Welcome to Fission")
         self.welcome.setAttribute(QtCore.Qt.WA_DeleteOnClose)
+        self.welcome.destroyed.connect(self.clear_welcome)
         self.welcome.showMaximized()
+
+    def clear_welcome(self, *_args):
+        self.welcome = None

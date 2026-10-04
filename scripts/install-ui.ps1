@@ -23,10 +23,6 @@ New-Item -ItemType Directory -Force -Path $binTarget | Out-Null
   <StartWorkbench>FissionWorkbench</StartWorkbench>
   <NavigationStyle>Gui::FissionNavigationStyle</NavigationStyle>
   <DesktopFileName>org.fission.Fission</DesktopFileName>
-  <BuildVersionMajor>0</BuildVersionMajor>
-  <BuildVersionMinor>1</BuildVersionMinor>
-  <BuildVersionPoint>0</BuildVersionPoint>
-  <BuildVersionSuffix>dev</BuildVersionSuffix>
   <BuildRepositoryURL>https://github.com/pjourney/fission</BuildRepositoryURL>
   <CopyrightInfo>Fission is based on the FreeCAD open-source project. Original copyrights and licenses apply.</CopyrightInfo>
 </Branding>

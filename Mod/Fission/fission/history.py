@@ -31,7 +31,7 @@ def category(obj):
         return "Origin"
     if "Joint" in type_id or hasattr(obj, "JointType"):
         return "Joints"
-    if any(token in type_id for token in ("ShapeBinder", "SubShapeBinder", "Datum", "PartDesign::Plane", "PartDesign::Line", "PartDesign::Point", "CoordinateSystem")):
+    if any(token in type_id for token in ("ShapeBinder", "SubShapeBinder", "Datum", "CoordinateSystem")) or type_id in ("PartDesign::Plane", "PartDesign::Line", "PartDesign::Point"):
         return "Reference geometry"
     if derived(obj, "PartDesign::Feature"):
         return "Features"

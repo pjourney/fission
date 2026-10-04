@@ -208,8 +208,10 @@ class Browser(_DocumentDock):
         self.tree.setObjectName("FissionBrowserTree")
         self.tree.setColumnCount(2)
         self.tree.setHeaderLabels(["Design", "Visible"])
+        self.tree.header().setStretchLastSection(False)
         self.tree.header().setSectionResizeMode(0, QtWidgets.QHeaderView.Stretch)
         self.tree.header().setSectionResizeMode(1, QtWidgets.QHeaderView.ResizeToContents)
+        self.tree.setIndentation(14)
         self.tree.setAlternatingRowColors(False)
         self.tree.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
         self.tree.setEditTriggers(QtWidgets.QAbstractItemView.EditKeyPressed)
@@ -297,7 +299,7 @@ class Browser(_DocumentDock):
                 font.setItalic(visible and not view.Visibility)
                 item.setFont(0, font)
                 item.setForeground(0, QtGui.QBrush(QtGui.QColor("#e3656f") if state == "error" else QtGui.QColor("#dda957") if state == "touched" else self.tree.palette().color(QtGui.QPalette.Text)))
-                if record.key in created and derived(obj, "PartDesign::Body"):
+                if record.key in created and (derived(obj, "PartDesign::Body") or derived(obj, "App::Part")):
                     item.setExpanded(True)
         finally:
             self.tree.blockSignals(False)

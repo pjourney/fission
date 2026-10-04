@@ -51,16 +51,18 @@ def initialize():
     global _initialized
     if _initialized:
         return
-    for name in ("PartGui", "SketcherGui", "PartDesignGui", "MeasureGui", "MaterialGui", "SurfaceGui", "MeshGui"):
+    for name in ("PartGui", "SketcherGui", "PartDesignGui", "MeasureGui", "MatGui", "SurfaceGui", "MeshGui", "SpreadsheetGui"):
         try:
             importlib.import_module(name)
         except ImportError as err:
             App.Console.PrintWarning("Fission: optional module %s unavailable: %s\n" % (name, err))
-    # Assembly registers its Python commands when initialized. No workbench switch.
+    # Load registration modules, not Workbench.Initialize directly: FreeCAD
+    # assigns the native __Workbench__ handle only during workbench activation.
     try:
-        wb = Gui.getWorkbench("AssemblyWorkbench")
-        if not Gui.Command.get("Assembly_CreateAssembly"):
-            wb.Initialize()
+        importlib.import_module("AssemblyGui")
+        for module in ("CommandCreateAssembly", "CommandInsertLink", "CommandInsertNewPart",
+                       "CommandCreateJoint", "CommandSolveAssembly"):
+            importlib.import_module(module)
     except Exception as err:
         App.Console.PrintWarning("Fission: Assembly unavailable: %s\n" % err)
     for name in COMMANDS:
@@ -75,7 +77,7 @@ class FissionCommand:
     def GetResources(self):
         title, backend, icon, aliases, context = COMMANDS[self.name]
         return {"MenuText": title, "ToolTip": title + " — " + aliases,
-                "Pixmap": icon, "CmdType": "ForEdit" if context == "sketch" else ""}
+                "Pixmap": icon, "CmdType": "NoTransaction ForEdit" if context == "sketch" or self.name in ("Extrude", "Cut") else "NoTransaction"}
 
     def Activated(self):
         from .shell import get_controller
@@ -87,6 +89,13 @@ class FissionCommand:
             return True
         if not App.ActiveDocument:
             return False
+        if self.name in ("Move", "NewComponent") and App.ActiveDocument.HasPendingTransaction:
+            return False
+        if self.name in ("Extrude", "Cut"):
+            doc = Gui.activeDocument()
+            edit = doc.getInEdit() if doc else None
+            if edit and edit.Object.isDerivedFrom("Sketcher::SketchObject"):
+                return True
         if backend:
             cmd = Gui.Command.get(backend)
             return bool(cmd and cmd.isActive())
@@ -103,7 +112,7 @@ def catalog():
             continue
         cmd = Gui.Command.get(cmd_id)
         info = cmd.getInfo()
-        result.append(dict(id=cmd_id, title=info.get("MenuText", cmd_id).replace("&", ""),
-                           aliases=cmd_id.replace("_", " "), icon=info.get("Pixmap", ""),
+        result.append(dict(id=cmd_id, title=info.get("menuText", cmd_id).replace("&", ""),
+                           aliases=cmd_id.replace("_", " "), icon=info.get("pixmap", ""),
                            context="sketch" if cmd_id.startswith("Sketcher_") else "all"))
     return result

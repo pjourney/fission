@@ -6,14 +6,21 @@ its original license/copyright header is preserved, as are its SpaceMouse hooks.
 """
 from pathlib import Path
 import difflib
+import json
+import subprocess
 
 root = Path(__file__).resolve().parents[1]
 source = root / "upstream-src"
 changes = {}
+revision = json.loads((root / "source-lock.json").read_text(encoding="utf-8"))["revision"]
+
+
+def baseline(relative):
+    return subprocess.check_output(["git", "-C", str(source), "show", revision + ":" + relative]).decode("utf-8").replace("\r\n", "\n")
 
 
 def replace_file(relative, pairs):
-    original = (source / relative).read_text(encoding="utf-8")
+    original = baseline(relative)
     revised = original
     for before, after in pairs:
         if before not in revised:
@@ -30,6 +37,22 @@ replace_file("src/Main/MainGui.cpp", [
     ('Config()["StartWorkbench"] = "PartDesignWorkbench"',
      'Config()["StartWorkbench"] = "FissionWorkbench";\n    App::Application::Config()["NavigationStyle"] = "Gui::FissionNavigationStyle"'),
     ('Config()["DesktopFileName"] = "org.freecad.FreeCAD"', 'Config()["DesktopFileName"] = "org.fission.Fission"'),
+    ('        Gui::Application::initApplication();', '''        // Fission uses stable Qt docks around its unified canvas. Configure
+        // this before the native dock manager constructs overlay containers.
+        auto shellPreferences = App::GetApplication().GetUserParameter()
+            .GetGroup("BaseApp/Preferences/Fission");
+        if (shellPreferences->GetInt("DockingVersion", 0) < 1) {
+            App::GetApplication().GetUserParameter()
+                .GetGroup("BaseApp/Preferences/DockWindows")
+                ->SetBool("ActivateOverlay", false);
+            for (const char* side : {"OverlayLeft", "OverlayRight", "OverlayTop", "OverlayBottom"}) {
+                App::GetApplication().GetUserParameter()
+                    .GetGroup("BaseApp/MainWindow/DockWindows")->GetGroup(side)
+                    ->SetASCII("Widgets", "");
+            }
+            shellPreferences->SetInt("DockingVersion", 1);
+        }
+        Gui::Application::initApplication();'''),
 ])
 replace_file("src/Main/MainCmd.cpp", [
     ('Config()["ExeName"] = "FreeCAD"', 'Config()["ExeName"] = "Fission"'),
@@ -77,11 +100,11 @@ replace_file("src/Gui/Navigation/NavigationStyle.h", [
     ('class GuiExport RevitNavigationStyle:', declaration + 'class GuiExport RevitNavigationStyle:'),
 ])
 replace_file("src/Mod/Sketcher/Gui/ViewProviderSketch.cpp", [
-    ('ADD_PROPERTY_TYPE(EditingWorkbench,\n                      ("SketcherWorkbench")',
-     'ADD_PROPERTY_TYPE(EditingWorkbench,\n                      ("FissionWorkbench")'),
+    ('"if ActiveSketch.ViewObject.EditingWorkbench:\\n"',
+     '"if ActiveSketch.ViewObject.EditingWorkbench and Gui.activeWorkbench().name() != \'FissionWorkbench\':\\n"'),
 ])
 
-navigation = (source / "src/Gui/Navigation/CADNavigationStyle.cpp").read_text(encoding="utf-8")
+navigation = baseline("src/Gui/Navigation/CADNavigationStyle.cpp")
 navigation = navigation.replace("CADNavigationStyle", "FissionNavigationStyle")
 navigation = navigation.replace('QT_TR_NOOP("Press middle or ctrl+right mouse button")', 'QT_TR_NOOP("Hold middle mouse button and drag")')
 navigation = navigation.replace('QT_TR_NOOP("Press middle+left, middle+right or shift+right mouse button")', 'QT_TR_NOOP("Hold Shift and middle mouse button and drag")')

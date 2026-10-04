@@ -32,6 +32,28 @@ diff --git a/src/Main/MainGui.cpp b/src/Main/MainGui.cpp
  
      try {
          // Init phase ===========================================================
+@@ -261,6 +262,21 @@
+             hGrp->SetASCII("NavigationStyle", style.c_str());
+         }
+ 
++        // Fission uses stable Qt docks around its unified canvas. Configure
++        // this before the native dock manager constructs overlay containers.
++        auto shellPreferences = App::GetApplication().GetUserParameter()
++            .GetGroup("BaseApp/Preferences/Fission");
++        if (shellPreferences->GetInt("DockingVersion", 0) < 1) {
++            App::GetApplication().GetUserParameter()
++                .GetGroup("BaseApp/Preferences/DockWindows")
++                ->SetBool("ActivateOverlay", false);
++            for (const char* side : {"OverlayLeft", "OverlayRight", "OverlayTop", "OverlayBottom"}) {
++                App::GetApplication().GetUserParameter()
++                    .GetGroup("BaseApp/MainWindow/DockWindows")->GetGroup(side)
++                    ->SetASCII("Widgets", "");
++            }
++            shellPreferences->SetInt("DockingVersion", 1);
++        }
+         Gui::Application::initApplication();
+ 
+         // Only if 'RunMode' is set to 'Gui' do the replacement
 diff --git a/src/Main/MainCmd.cpp b/src/Main/MainCmd.cpp
 --- a/src/Main/MainCmd.cpp
 +++ b/src/Main/MainCmd.cpp
@@ -171,15 +193,15 @@ diff --git a/src/Gui/Navigation/NavigationStyle.h b/src/Gui/Navigation/Navigatio
 diff --git a/src/Mod/Sketcher/Gui/ViewProviderSketch.cpp b/src/Mod/Sketcher/Gui/ViewProviderSketch.cpp
 --- a/src/Mod/Sketcher/Gui/ViewProviderSketch.cpp
 +++ b/src/Mod/Sketcher/Gui/ViewProviderSketch.cpp
-@@ -651,7 +651,7 @@
-         (App::PropertyType)(App::Prop_ReadOnly),
-         "If true, only objects (or part of) located behind the sketch plane are visible.");
-     ADD_PROPERTY_TYPE(EditingWorkbench,
--                      ("SketcherWorkbench"),
-+                      ("FissionWorkbench"),
-                       "Visibility automation",
-                       (App::PropertyType)(App::Prop_ReadOnly),
-                       "Name of the workbench to activate when editing this sketch.");
+@@ -4250,7 +4250,7 @@
+                     "ActiveSketch = App.getDocument('%1').getObject('%2')\n"
+                     "tv = Show.TempoVis(App.ActiveDocument, tag= ActiveSketch.ViewObject.TypeId)\n"
+                     "ActiveSketch.ViewObject.TempoVis = tv\n"
+-                    "if ActiveSketch.ViewObject.EditingWorkbench:\n"
++                    "if ActiveSketch.ViewObject.EditingWorkbench and Gui.activeWorkbench().name() != 'FissionWorkbench':\n"
+                     "  tv.activateWorkbench(ActiveSketch.ViewObject.EditingWorkbench)\n"
+                     "if ActiveSketch.ViewObject.HideDependent:\n"
+                     "  tv.hide(tv.get_all_dependent(%3, '%4'))\n"
 diff --git a/src/Gui/Navigation/FissionNavigationStyle.cpp b/src/Gui/Navigation/FissionNavigationStyle.cpp
 new file mode 100644
 --- /dev/null
