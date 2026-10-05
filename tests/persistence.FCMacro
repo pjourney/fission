@@ -82,6 +82,23 @@ def run_persistence_phase():
             controller.main.move(100, 75)
             controller.browser.show()
             controller.timeline.show()
+            # Launch actual toolbox commands with Return; recents must survive
+            # a different application process, not just this dialog instance.
+            for _ in range(2):
+                controller.perform("Search")
+                settle(80)
+                toolbox = controller.search_dialog
+                toolbox.input.setText("Browser")
+                item = next(toolbox.results.topLevelItem(index)
+                            for index in range(toolbox.results.topLevelItemCount())
+                            if toolbox.results.topLevelItem(index).data(0, QtCore.Qt.UserRole) == "Fission_ToggleBrowser")
+                toolbox.results.setCurrentItem(item)
+                QtTest.QTest.keyClick(toolbox.input, QtCore.Qt.Key_Return)
+                settle(100)
+                require(not toolbox.isVisible(), "A successful toolbox command must close search")
+            require(controller.browser.isVisible(), "Two real Browser toggles must restore the original visibility")
+            require("Fission_ToggleBrowser" in controller.settings.GetString("CommandSearchHistory", ""),
+                    "Successful toolbox launches must persist command history")
             preferences = PreferencesDialog(controller, controller.main)
             preferences.theme.setCurrentText("Light")
             preferences.navigation.setCurrentIndex(preferences.navigation.findData("Gui::CADNavigationStyle"))
@@ -120,6 +137,14 @@ def run_persistence_phase():
             require(written["status"] == "passed", "A successful write process must precede read")
             require(written["process_id"] != os.getpid(), "Read validation must run in a genuinely separate process")
             require(controller.settings.GetString("Theme", "") == "Light", "Light theme must survive application restart")
+            controller.perform("Search")
+            settle(80)
+            toolbox = controller.search_dialog
+            require(toolbox.results.topLevelItem(0).data(0, QtCore.Qt.UserRole) == "Fission_ToggleBrowser",
+                    "A new process must load successful toolbox history into the first available result")
+            result["search_history_restart"] = "Fission_ToggleBrowser"
+            toolbox.close()
+            settle(80)
             marking = read_config(controller.settings)
             require(not marking["enabled"] and marking["slots"]["model"][:2] == ["Fission_Fit", ""],
                     "Disabled marking menu and custom/empty slots must survive a separate process restart")

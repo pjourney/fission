@@ -1,8 +1,8 @@
-# Fission 0.3 Alpha architecture
+# Fission 0.4 Alpha architecture
 
-Fission `0.3.0-alpha` builds the pinned FreeCAD C++ application with a small
+Fission `0.4.0-alpha` builds the pinned FreeCAD C++ application with a small
 identity/navigation patch and a shared native Qt shell for Design, Drawing,
-and Manufacture. Product labels use **Fission 0.3 Alpha**. The engine retains
+and Manufacture. Product labels use **Fission 0.4 Alpha**. The engine retains
 its upstream version for document migrations and FCStd compatibility.
 
 ## Core and presentation boundary
@@ -140,8 +140,19 @@ Compute (Ctrl+B), Appearance (A), and Move (M) retain Surface/Mesh mappings.
 Typing in line/text/numeric editors keeps standard editing behavior. Classic
 restores original actions. Custom edits, conflict checking, individual/all reset,
 JSON import/export and disk persistence use Fission's parameter namespace.
-`search.py` provides S command search over registered commands, aliases, context,
-shortcut hints and recent choices. Unsupported documented Fusion keys are
+`search.py` provides S command search over all registered commands, aliases,
+normalized words and native IDs. Query relevance precedes context; empty queries
+prioritize the current context and successful recent launches. Native availability
+uses cached action flags plus context-vetted ribbon/factory commands. Registered
+tools from unloaded workbenches remain unavailable. Explicit updates and one
+coalesced selection follow-up respect the native 150 ms action-update delay.
+Availability is checked again before queued dispatch.
+Unavailable rows remain visible, while keyboard navigation skips them. Closing
+the toolbox restores its source focus; CAD dispatch focuses the native canvas
+after close events have settled. A retained document/view identity and context
+prevent a stale search from launching a tool in another document or edit mode.
+Versioned bounded history under Fission's `CommandSearchHistory` stores only
+successful command IDs, retaining no model contents or queries. Unsupported documented Fusion keys are
 reserved with a visible explanation instead of launching unrelated native tools.
 Exact mappings and differences are in FISSION_SHORTCUTS.md.
 
@@ -173,13 +184,15 @@ tests save/reopen and interchange, and exposes the actual GUI Stitch
 accept/cancel/Undo/Redo case to the serial runner. Its App-only cases can run
 under `FissionCmd.exe` with `FISSION_SPECIALIST_AUTORUN=1`.
 
-The 0.3 build-tree and installed portable suites each passed 34 native GUI cases
-and separate restart checks; all 71 presentation/Qt tests and 26 native CTest
+The 0.4 build-tree and installed portable suites each passed 37 native GUI cases
+and separate restart checks; all 111 presentation/Qt tests and 26 native CTest
 executables passed. Canvas acceptance includes native concave selection, linked
 paint/escape paths, idle Assembly, actual Fillet tasks, actual Sketcher line clicks,
 configuration resets, stationary click guards after popup fitting, and New Design
 from Drawing. `scripts/test-gui.ps1 -CanvasOnly` runs four focused canvas groups.
-Primary installed-runtime reports are in `test-output/canvas-portable`.
+Command search adds actual native Fillet tasks, Sketcher line clicks, readiness,
+focus and document-lifetime checks. `scripts/test-gui.ps1 -SearchOnly` runs three
+focused search groups. Primary installed reports are in `test-output/search-portable`.
 
 Earlier native acceptance for the 0.2 workspace, Stitch, cube, and navigation-strip
 controls was exercised on October 4, 2026. The targeted workspace run passed

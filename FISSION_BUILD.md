@@ -20,7 +20,7 @@ its command-line companion is `FissionCmd.exe`.
 checkout is stored in `upstream-src`. Applying Fission creates branch
 `codex/fission-engine` and retains the FreeCAD remote as `upstream`. Engine
 version 27.1 and its document compatibility rules are preserved; the Fission
-presentation has its own 0.3 Alpha label.
+presentation has its own 0.4 Alpha label.
 
 Requirements are Windows x64, Git, PowerShell, curl, a Windows SDK, and Visual
 Studio C++ Build Tools with CMake and Ninja. Allow at least 25 GB of free space
@@ -70,7 +70,7 @@ and compilation logs are in `build/windows-release/configure.log` and `build.log
 Downloaded dependencies, engine checkout, build outputs, and packages are ignored
 by the Fission root repository.
 
-`patches/0001-fission-identity-navigation.patch` contains 21 native source
+`patches/0001-fission-identity-navigation.patch` contains 25 native source
 adaptations for executable identity, resources, navigation, dock startup
 migration, document task ownership, Assembly shell retention and Python wrapper
 registration, safe GUI observer construction, and contextual task-panel lifetime.
@@ -103,6 +103,9 @@ Repeat this validation when changing the patch; failed hunks are not ignored.
 
 # Target just the native Drawing/CAM editors and workspace/navigation controls.
 .\scripts\test-gui.ps1 -WorkspacesOnly -OutputDirectory test-output\workspaces
+
+# Target native search readiness, focus, Fillet tasks and Sketcher canvas input.
+.\scripts\test-gui.ps1 -SearchOnly -OutputDirectory test-output\search-focused
 
 # Full upstream Python app suite, for a separate extended run.
 .\scripts\test-upstream.ps1 -SkipCpp -PythonSuite 0
@@ -141,12 +144,15 @@ uses explicit user configuration files, checks completion markers and exit
 codes, and restores its temporary environment. Integrated JSON reports, native
 logs, FCStd/STEP/STL files, and screenshots are saved in `test-output`.
 
-On October 4, 2026, the branded engine passed all 26 CTest executables. Both the
-build-tree run and the final installed portable run passed 34/34 native GUI
+On October 5, 2026, the branded engine passed all 26 CTest executables. Both the
+build-tree run and the final installed portable run passed 37/37 native GUI
 cases, followed by passing persistence writer and reader processes. Primary
-delivery evidence is in `test-output/canvas-portable/smoke-results.json` and
-`test-output/canvas-portable/persistence-report.json`; the build-tree
-results are in `test-output/canvas-full-4`.
+delivery evidence is in `test-output/search-portable/smoke-results.json` and
+`test-output/search-portable/persistence-report.json`; the build-tree
+results are in `test-output/search-full`. The combined unit/Qt suite passed
+111 checks; `build/search-combined-tests.log` records that run. Search coverage
+includes actual native Fillet preview/Cancel/OK/Undo, Sketcher line clicks,
+selection readiness, closing documents, complete catalog and persisted recents.
 The integrated cases cover native feature preview/OK/Cancel/Undo, active component
 scoping, Browser/Timeline, Qt shortcuts, camera input, selected Drawing/CAM
 editors, Surface/Mesh geometry and files with live catalog checks, Assembly
@@ -168,37 +174,40 @@ to presentation.
 
 ## Portable package and matching source
 
-The verified 0.3 runtime stage is
-`dist/0.3.0-alpha/staging/20261004-140915-354`. It passed native GUI/restart and
+The verified 0.4 runtime stage is identified by `runtimeDirectory` in
+`dist/0.4.0-alpha/package-manifest.json`. It passed native GUI/restart and
 installed-runtime checks, 13 geometry cases, and nine workbench activations.
 `verification/portable-gui-report.json`, `verification/cad/report.json`,
 `stage-manifest.json`, and `source-verification.json` retain installed-path,
 geometry, native-byte, and applied-source evidence. The package manifests record
 verified native paths, `lib` aliases, and matching engine/Fission source hashes.
-The earlier 0.1 and 0.2 deliveries are preserved outside
-`dist/0.3.0-alpha`.
+The earlier 0.1, 0.2, and 0.3 deliveries are preserved outside
+`dist/0.4.0-alpha`.
 
 Use the following procedure to stage, verify, and generate the final archives:
 
 ```powershell
 # Stage native runtime, notices, and the matching applied source first.
-.\scripts\package.ps1 -StageOnly -OutputDirectory dist\0.3.0-alpha
+.\scripts\package.ps1 -StageOnly -OutputDirectory dist\0.4.0-alpha
 
 # Use the stage path printed above. This launches the staged native GUI too.
-.\scripts\test-portable.ps1 -RuntimeDirectory '.\dist\0.3.0-alpha\staging\<stage>\Fission'
+.\scripts\test-portable.ps1 -RuntimeDirectory '.\dist\0.4.0-alpha\staging\<stage>\Fission'
+
+# Repeat integrated GUI and independent settings restart checks in the stage.
+.\scripts\test-gui.ps1 -BuildDirectory '.\dist\0.4.0-alpha\staging\<stage>\Fission' -OutputDirectory test-output\search-portable -TimeoutSeconds 180
 
 # Refresh UI/docs/source in that stage and create the final archives.
-.\scripts\package.ps1 -OutputDirectory dist\0.3.0-alpha -ReuseStageDirectory '.\dist\0.3.0-alpha\staging\<stage>'
+.\scripts\package.ps1 -OutputDirectory dist\0.4.0-alpha -ReuseStageDirectory '.\dist\0.4.0-alpha\staging\<stage>'
 ```
 
 The script runs the configured CMake install target into a fresh directory under
 `OutputDirectory/staging`, installs Fission UI files, includes root notices and dependency
 licenses/SBOM, and produces:
 
-- `dist/0.3.0-alpha/Fission-Alpha-Windows-x64.zip`, containing the complete portable runtime.
-- `dist/0.3.0-alpha/Fission-Alpha-source.zip`, containing the exact applied Fission/FreeCAD
+- `dist/0.4.0-alpha/Fission-Alpha-Windows-x64.zip`, containing the complete portable runtime.
+- `dist/0.4.0-alpha/Fission-Alpha-source.zip`, containing the exact applied Fission/FreeCAD
   source and recursive submodule files, patches, scripts, and notices.
-- `dist/0.3.0-alpha/package-manifest.json`, recording presentation version, source pin, patch hashes, executable
+- `dist/0.4.0-alpha/package-manifest.json`, recording presentation version, source pin, patch hashes, executable
   hash, archive hashes/sizes, and staging location.
 
 LibPack's generated installer contains absolute dependency destinations. Packaging

@@ -1,14 +1,15 @@
-# Fission 0.3 Alpha
+# Fission 0.4 Alpha
 
-Fission `0.3.0-alpha` adds an original configurable marking menu and real native
-rectangle, freehand, and paint selection to the Windows CAD application. Design,
-Drawing, and Manufacture retain the shared shell and native FreeCAD tools.
+Fission `0.4.0-alpha` refines the S command toolbox with complete results,
+contextual readiness, reliable native canvas focus, and persistent recent
+launches. Design, Drawing, and Manufacture retain the shared shell, configurable
+marking menu, native selection tools, and FreeCAD CAD operations.
 The pinned engine keeps version 27.1 for document compatibility. Sketch solving,
 geometry, native feature tasks, Undo, and file formats remain authoritative.
 
 ## Current validation
 
-Status date: October 4, 2026. Windows 11 x64, MSVC 14.50.35717, Qt/PySide 6.11.1,
+Status date: October 5, 2026. Windows 11 x64, MSVC 14.50.35717, Qt/PySide 6.11.1,
 Python 3.14.7, OpenCASCADE 8.0.1. FreeCAD pin:
 `c1c0b506213e072d6f1498739abb1c3890159426`.
 
@@ -16,19 +17,50 @@ Python 3.14.7, OpenCASCADE 8.0.1. FreeCAD pin:
 | --- | --- |
 | Native source compilation | Passed |
 | Native CTest executables | 26/26 passed |
-| Fission profile/history/marking and real Qt tests | 71/71 passed |
-| Build-tree integrated native GUI suite | 34/34 passed |
-| Installed portable integrated native GUI suite | 34/34 passed |
+| Fission profile/history/marking/search and real Qt tests | 111/111 passed |
+| Build-tree integrated native GUI suite | 37/37 passed |
+| Installed portable integrated native GUI suite | 37/37 passed |
 | Portable settings writer/reader in separate processes | Both passed |
 | Installed command-line CAD workflows | 13/13 passed |
 | Installed native workbenches and module/resource paths | All nine passed |
-| Native patch generation and fresh pinned application | All 25 adaptations passed |
+| Native patch generation and fresh pinned application | All 25 adaptations passed in 0.3; engine patch unchanged |
 
 The installed GUI repeats the build-tree workflows with its own profile,
 embedded Python, native modules, and resources. Actual Qt events invoke native
 tools and tasks. These are selected acceptance workflows rather than complete
 coverage of every exposed command. The source/runtime hashes and archive
 integrity checks are recorded in the delivery manifests.
+
+## Command toolbox acceptance
+
+S opens the native toolbox from Browser or canvas. Every registered command is
+searchable; the focused run displays all 599 entries. Names and aliases are
+case/whitespace tolerant, and native IDs support literal and word searches.
+Matching relevance precedes workspace ties. Empty searches prioritize the
+current context and recent successful launches. Ready/Unavailable states and
+current shortcuts remain visible; Up/Down skip unavailable rows.
+
+Native action flags supply readiness for loaded commands. Current Fission ribbon
+and factory-key tools also work without stock workbench actions. Inactive
+workbench tools remain listed as unavailable. This avoids querying native
+commands that assume a missing viewer. Selection observation follows the native
+action-update delay with one coalesced refresh; closing search removes its
+observer and stops its timer. Document/view/context changes, disposed native
+handles, a reopened toolbox, and a newly opened modal/popup invalidate dispatch.
+
+Actual Return events launch New Design and native Fillet. Fillet preview, Cancel
+rollback, OK with one Undo step, and Ctrl+Z restoration pass. Searching Line from
+the Browser during Sketcher editing restores native canvas focus; two canvas
+clicks create a real solver-valid line. Finish Sketch releases the native task
+and the document saves as FCStd. Escape restores the originating Browser focus.
+Visible readiness follows actual selection changes, and closing the owning
+document safely invalidates an open search.
+
+History stores at most 12 unique command IDs in versioned Fission settings. A
+successful launch means accepted command invocation; cancelling its later CAD
+task does not remove it from history. Failed/unavailable launches are excluded.
+A separate writer/reader process verifies history reload alongside the existing
+appearance, navigation, shortcuts, and layout checks.
 
 ## Canvas acceptance
 
@@ -85,26 +117,29 @@ partial.
 
 Primary local evidence:
 
-- `test-output/canvas-portable/smoke-results.json` and `persistence-report.json`:
-  all 34 installed GUI cases and separate restart processes, with native models,
+- `test-output/search-portable/smoke-results.json` and `persistence-report.json`:
+  all 37 installed GUI cases and separate restart processes, with native models,
   exports, screenshots, logs, and completion markers.
-- `test-output/canvas-full-4/smoke-results.json`: passing 34-case build-tree run.
+- `test-output/search-full/smoke-results.json`: passing 37-case build-tree run.
+- `test-output/search-focused-4/search-results.json`: three focused native search
+  groups, complete catalog/readiness checks, Fillet transactions and Sketcher clicks.
+- `build/search-combined-tests.log`: 111 presentation/unit/real Qt checks.
 - `test-output/canvas-4/canvas-results.json`: four focused canvas groups, including
   native sketch clicks and unchanged preference/geometry state.
 - `test-output/assembly-patch-validation.json`: deterministic generation,
   fresh-baseline application, normalized source equality, and reverse checking
   for all 25 adaptations.
-- `dist/0.3.0-alpha/staging/20261004-140915-354/verification`: installed native
+- `dist/0.4.0-alpha/staging/<stage>/verification`: installed native
   GUI/module/workbench checks and 13 command-line CAD cases.
 
-Extract `dist/0.3.0-alpha/Fission-Alpha-Windows-x64.zip` and open
+Extract `dist/0.4.0-alpha/Fission-Alpha-Windows-x64.zip` and open
 `Fission/bin/Fission.exe`. The companion `Fission-Alpha-source.zip` contains the
 matching applied engine/submodule and Fission source. `package-manifest.json`,
 `stage-manifest.json`, and `SOURCE_SHA256.json` record archive/native/source hashes.
 Native binaries under `bin`, `Mod`, and installed `lib` aliases are refreshed and
 verified. Final packaging repeats command-line CAD checks and tests both ZIPs.
 The runtime includes the editable machined-plate example and dependency licenses,
-notices, and SBOM. Earlier 0.1 and 0.2 artifacts are preserved. No remote push or
+notices, and SBOM. Earlier 0.1, 0.2, and 0.3 artifacts are preserved. No remote push or
 upstream submission was made.
 
 ## Prior evidence and remaining scope

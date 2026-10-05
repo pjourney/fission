@@ -559,6 +559,13 @@ def run_fission_smoke():
                     lambda: sketch_marking_workflow.run(controller, settle, report.output))
         report.case("Marking menu preference commits resets cancellation and unchanged wheel zoom",
                     lambda: canvas_workflows.settings(controller, settle, report.output))
+        import search_workflows
+        report.case("Command toolbox complete results availability cancellation and successful recents",
+                    lambda: search_workflows.toolbox(controller, settle, report.output))
+        report.case("Search launches native Fillet preview Cancel OK and Ctrl+Z",
+                    lambda: search_workflows.modeling(controller, settle, report.output))
+        report.case("Search launches native Sketch Line with Browser-to-canvas focus and Finish Sketch",
+                    lambda: search_workflows.sketch(controller, settle, report.output))
         App.setActiveDocument(doc.Name)
         controller.refresh_context()
         settle()

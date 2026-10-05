@@ -301,7 +301,7 @@ class NativeQtShortcutTests(unittest.TestCase):
         self.native.triggered.connect(lambda: self.native_calls.append("E"))
         self.main.addAction(self.native)
         controller = types.SimpleNamespace(context=lambda: self.current_context,
-            execute=lambda command: self.called.append(command), notify=self.notifications.append,
+            execute=lambda command: self.called.append(command) or True, notify=self.notifications.append,
             command_catalog=lambda: [{"id":"Fission_Extrude", "title":"Extrude",
                                       "aliases":"pad extrude", "context":"model"}])
         self.controller = controller

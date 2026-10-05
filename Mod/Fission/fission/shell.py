@@ -489,6 +489,8 @@ class Controller(QtCore.QObject):
         if not self.active or self._activation_pending:
             return
         self.marking.validate()
+        if hasattr(self, "search_dialog"):
+            self.search_dialog.validate_owner()
         doc = App.ActiveDocument
         gui_doc = Gui.getDocument(doc.Name) if doc else None
         editing = bool(Gui.Control.activeDialog() or (gui_doc and gui_doc.getInEdit()))
@@ -632,7 +634,7 @@ class Controller(QtCore.QObject):
             PreferencesDialog(self, self.main).exec()
         elif name == "About":
             QtWidgets.QMessageBox.about(self.main, "About Fission",
-                "<h2>Fission 0.3 Alpha</h2><p>Local parametric mechanical design.</p>"
+                "<h2>Fission 0.4 Alpha</h2><p>Local parametric mechanical design.</p>"
                 "<p>Fission is based on the FreeCAD open-source project.</p>"
                 "<p>FreeCAD's contributors retain their copyrights. Engine: LGPL 2.1 or later; "
                 "Fission presentation: MIT and LGPL, as identified in each source file. See the bundled NOTICE and licenses.</p>"
@@ -850,6 +852,63 @@ class Controller(QtCore.QObject):
     def command_catalog(self):
         return catalog()
 
+    def refresh_command_state(self):
+        """Refresh native action ownership once for an explicit toolbox update."""
+        if self.active and not self._activation_pending:
+            self._search_command_ids = {button.property("fissionCommand") for button in self.buttons}
+            if not hasattr(self, "_search_factory_bindings"):
+                from .shortcuts import ShortcutProfile
+                self._search_factory_bindings = ShortcutProfile().bindings
+            context = self.context()
+            self._search_command_ids.update(row["command"] for row in self._search_factory_bindings
+                if row.get("state") != "unsupported" and ("*" in row["contexts"] or context in row["contexts"]))
+            Gui.Command.update()
+
+    def command_available(self, command_id, refresh=False):
+        """Use the same native availability gates as command execution."""
+        if not self.active or self._activation_pending:
+            return False
+        if refresh:
+            self.refresh_command_state()
+        command = Gui.Command.get(command_id)
+        if not command:
+            return False
+        if command_id.startswith("Fission_"):
+            if not command.isActive():
+                return False
+            name = command_id.removeprefix("Fission_")
+            backend = COMMANDS.get(name, (None, None))[1]
+            # Finishing a sketch before Pad/Pocket is a deliberate transition.
+            if name in ("Extrude", "Cut") and self.context() == "sketch":
+                return True
+            native = Gui.Command.get(backend) if backend else None
+            actions = native.getAction() if native else []
+            return not actions or any(action.isEnabled() for action in actions)
+        # Registered commands from inactive workbenches may assume a native
+        # viewer/task that does not exist. Query only instantiated actions;
+        # Command.update already applied their native ownership/active checks.
+        actions = command.getAction()
+        if actions:
+            return any(action.isEnabled() for action in actions)
+        # Fission's ribbon and factory keys also present native tools without
+        # creating stock workbench actions. These context-vetted commands use
+        # the same active check as the ribbon; unloaded catalogs stay unavailable.
+        if command_id in getattr(self, "_search_command_ids", set()):
+            return bool(command.isActive())
+        return False
+
+    def command_context_token(self):
+        """Retain object identity so closing/reopening a named document is stale."""
+        document = App.ActiveDocument
+        gui_document = Gui.activeDocument() if document else None
+        view = gui_document.activeView() if gui_document else None
+        return document, view
+
+    def command_focus_widget(self):
+        gui_document = Gui.activeDocument() if App.ActiveDocument else None
+        view = gui_document.activeView() if gui_document else None
+        return view.graphicsView() if view and hasattr(view, "graphicsView") else None
+
     def notify(self, message):
         self.main.statusBar().showMessage(message, 8000)
 
@@ -903,6 +962,8 @@ class Controller(QtCore.QObject):
 
     def shutdown(self):
         self.timer.stop()
+        if hasattr(self, "search_dialog"):
+            self.search_dialog.close()
         self.marking.shutdown()
         self.paint.shutdown()
         self.browser.shutdown()

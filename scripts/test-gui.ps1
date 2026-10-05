@@ -6,7 +6,8 @@ param(
     [switch]$SkipPersistence,
     [switch]$WorkspacesOnly,
     [switch]$CanvasOnly,
-    [ValidateRange(15,180)][int]$TimeoutSeconds = 90
+    [switch]$SearchOnly,
+    [ValidateRange(15,180)][int]$TimeoutSeconds = 180
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -49,8 +50,9 @@ try {
     $env:FISSION_TEST_OUTPUT = $OutputDirectory
     if ($WorkspacesOnly) { Invoke-FissionMacro 'native-workspaces' 'tests\workspaces.FCMacro' 'workspace.cfg' 'workspace-complete.txt' }
     if ($CanvasOnly) { Invoke-FissionMacro 'native-canvas' 'tests\canvas.FCMacro' 'canvas.cfg' 'canvas-complete.txt' }
-    if (-not $WorkspacesOnly -and -not $CanvasOnly -and -not $SkipSmoke) { Invoke-FissionMacro 'native-smoke' 'tests\smoke.FCMacro' 'user.cfg' 'smoke-complete.txt' }
-    if (-not $WorkspacesOnly -and -not $CanvasOnly -and -not $SkipPersistence) {
+    if ($SearchOnly) { Invoke-FissionMacro 'native-search' 'tests\search.FCMacro' 'search.cfg' 'search-complete.txt' }
+    if (-not $WorkspacesOnly -and -not $CanvasOnly -and -not $SearchOnly -and -not $SkipSmoke) { Invoke-FissionMacro 'native-smoke' 'tests\smoke.FCMacro' 'user.cfg' 'smoke-complete.txt' }
+    if (-not $WorkspacesOnly -and -not $CanvasOnly -and -not $SearchOnly -and -not $SkipPersistence) {
         foreach ($phase in @('write', 'read')) {
             $env:FISSION_PERSISTENCE_PHASE = $phase
             Invoke-FissionMacro ('persistence-' + $phase) 'tests\persistence.FCMacro' 'persistence.cfg' ('persistence-' + $phase + '-complete.txt')

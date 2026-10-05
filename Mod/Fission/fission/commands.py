@@ -138,6 +138,10 @@ class FissionCommand:
 def catalog():
     result = []
     for name, (title, backend, icon, aliases, context) in COMMANDS.items():
+        if name in ("Extrude", "Cut"):
+            context = ["model", "sketch"]
+        elif name in ("WindowSelection", "FreeformSelection", "PaintSelection"):
+            context = ["model", "assembly", "surface", "mesh", "cam"]
         result.append(dict(id="Fission_" + name, title=title, aliases=aliases,
                            icon=icon, context=context))
     for cmd_id in Gui.Command.listAll():
