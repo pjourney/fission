@@ -121,7 +121,7 @@ if ((Get-FileHash -LiteralPath (Join-Path $runtimeStage 'bin\Fission.exe') -Algo
 
 $licenseRoot = Join-Path $runtimeStage 'licenses'
 New-Item -ItemType Directory -Force -Path $licenseRoot | Out-Null
-foreach ($noticeName in @('LICENSE', 'NOTICE.md', 'README.md', 'FISSION_SHORTCUTS.md', 'FISSION_STATUS.md', 'FISSION_BUILD.md')) {
+foreach ($noticeName in @('LICENSE', 'NOTICE.md', 'README.md', 'FISSION_SHORTCUTS.md', 'FISSION_STATUS.md', 'FISSION_BUILD.md', 'FISSION_ARCHITECTURE.md')) {
     $noticePath = Join-Path $projectRoot $noticeName
     if (Test-Path -LiteralPath $noticePath) { Copy-Item -LiteralPath $noticePath -Destination $runtimeStage }
 }
