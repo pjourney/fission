@@ -389,6 +389,22 @@ class ShortcutManager(_QObject):
             return False
         if focus.window() is not self.main_window:
             return False
+        # Document views own editing keys and Qt navigation, including task
+        # and empty-selection guards. Let local ShortcutOverride protect them
+        # before global/custom commands or native camera actions can dispatch.
+        if focus.property("fissionDocumentPanelKeys"):
+            panel_modifiers = event.modifiers() & (QtCore.Qt.ControlModifier | QtCore.Qt.AltModifier |
+                                                    QtCore.Qt.ShiftModifier | QtCore.Qt.MetaModifier)
+            if (not panel_modifiers
+                    and event.key() in (QtCore.Qt.Key_Return, QtCore.Qt.Key_Enter,
+                                        QtCore.Qt.Key_F2, QtCore.Qt.Key_Delete)):
+                return False
+            if (not panel_modifiers & (QtCore.Qt.AltModifier | QtCore.Qt.MetaModifier)
+                    and event.key() in (QtCore.Qt.Key_Left, QtCore.Qt.Key_Right,
+                                        QtCore.Qt.Key_Up, QtCore.Qt.Key_Down,
+                                        QtCore.Qt.Key_Home, QtCore.Qt.Key_End,
+                                        QtCore.Qt.Key_PageUp, QtCore.Qt.Key_PageDown)):
+                return False
         shortcut = self._event_shortcut(event)
         if not shortcut:
             return False

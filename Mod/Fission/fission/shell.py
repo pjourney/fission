@@ -634,7 +634,7 @@ class Controller(QtCore.QObject):
             PreferencesDialog(self, self.main).exec()
         elif name == "About":
             QtWidgets.QMessageBox.about(self.main, "About Fission",
-                "<h2>Fission 0.4 Alpha</h2><p>Local parametric mechanical design.</p>"
+                "<h2>Fission 0.5 Alpha</h2><p>Local parametric mechanical design.</p>"
                 "<p>Fission is based on the FreeCAD open-source project.</p>"
                 "<p>FreeCAD's contributors retain their copyrights. Engine: LGPL 2.1 or later; "
                 "Fission presentation: MIT and LGPL, as identified in each source file. See the bundled NOTICE and licenses.</p>"

@@ -1,8 +1,9 @@
-# Fission 0.4 Alpha
+# Fission 0.5 Alpha
 
-Fission `0.4.0-alpha` refines the S command toolbox with complete results,
-contextual readiness, reliable native canvas focus, and persistent recent
-launches. Design, Drawing, and Manufacture retain the shared shell, configurable
+Fission `0.5.0-alpha` adds keyboard editing and inline rename to the Browser and
+Timeline, preserves multi-object native deletion, and scopes their Create Sketch
+menus to the active component. Design, Drawing, and Manufacture retain the shared
+shell, complete S command toolbox with persistent recents, configurable
 marking menu, native selection tools, and FreeCAD CAD operations.
 The pinned engine keeps version 27.1 for document compatibility. Sketch solving,
 geometry, native feature tasks, Undo, and file formats remain authoritative.
@@ -17,9 +18,9 @@ Python 3.14.7, OpenCASCADE 8.0.1. FreeCAD pin:
 | --- | --- |
 | Native source compilation | Passed |
 | Native CTest executables | 26/26 passed |
-| Fission profile/history/marking/search and real Qt tests | 111/111 passed |
-| Build-tree integrated native GUI suite | 37/37 passed |
-| Installed portable integrated native GUI suite | 37/37 passed |
+| Fission profiles/history/panels/marking/search and real Qt tests | 127/127 passed |
+| Build-tree integrated native GUI suite | 41/41 passed |
+| Installed portable integrated native GUI suite | 41/41 passed |
 | Portable settings writer/reader in separate processes | Both passed |
 | Installed command-line CAD workflows | 13/13 passed |
 | Installed native workbenches and module/resource paths | All nine passed |
@@ -30,6 +31,31 @@ embedded Python, native modules, and resources. Actual Qt events invoke native
 tools and tasks. These are selected acceptance workflows rather than complete
 coverage of every exposed command. The source/runtime hashes and archive
 integrity checks are recorded in the delivery manifests.
+
+## Browser and Timeline keyboard acceptance
+
+Arrow keys navigate native object rows; Shift extends selection. Canvas selection
+also updates the current keyboard row in both panels without replacing the
+selected set. Enter edits one selected feature through its native task; Browser
+Enter activates a selected body, component, or assembly. F2 opens an inline editor
+containing the native Label, excluding Timeline tip/edit markers. Return commits
+one native rename transaction; Escape cancels. Text keys, including E and Delete,
+retain their editor behavior. Labels synchronize across both panels and survive
+native Undo/Redo and FCStd reopen.
+
+Delete invokes native Std_Delete once for the full selected row set. Native
+dependency confirmation and Undo remain authoritative. Right-clicking a selected
+row preserves multi-selection for Delete. Active feature tasks and pending
+transactions block history edits, rename, and deletion; stale or empty rows cannot
+dispatch an operation against unrelated native selection. Enter/F2/Delete are
+panel operations in all keyboard profiles, including Custom. Arrow/Home/End/Page
+navigation, with Ctrl/Shift, retains Qt selection behavior and takes precedence
+over native camera shortcuts or custom bindings while a panel has focus.
+
+Document identity is checked before resolving rows and committing labels, so a
+closed or switched design cannot redirect an editor to another same-named object.
+Create Sketch from either shared panel menu uses Fission's body adapter and
+establishes a real Body in the active empty component before the native plane task.
 
 ## Command toolbox acceptance
 
@@ -117,29 +143,32 @@ partial.
 
 Primary local evidence:
 
-- `test-output/search-portable/smoke-results.json` and `persistence-report.json`:
-  all 37 installed GUI cases and separate restart processes, with native models,
+- `test-output/history-portable/smoke-results.json` and `persistence-report.json`:
+  all 41 installed GUI cases and separate restart processes, with native models,
   exports, screenshots, logs, and completion markers.
-- `test-output/search-full/smoke-results.json`: passing 37-case build-tree run.
+- `test-output/history-full/smoke-results.json`: passing 41-case build-tree run.
 - `test-output/search-focused-4/search-results.json`: three focused native search
   groups, complete catalog/readiness checks, Fillet transactions and Sketcher clicks.
-- `build/search-combined-tests.log`: 111 presentation/unit/real Qt checks.
+- `test-output/history-focused-4/history-results.json`: four focused native panel
+  groups covering keyboard selection, inline labels, feature tasks, dependency
+  prompts, multi-object Delete/Undo, keypad Enter, and component-aware Create Sketch.
+- `build/history-combined-tests.log`: 127 presentation/unit/real Qt checks.
 - `test-output/canvas-4/canvas-results.json`: four focused canvas groups, including
   native sketch clicks and unchanged preference/geometry state.
 - `test-output/assembly-patch-validation.json`: deterministic generation,
   fresh-baseline application, normalized source equality, and reverse checking
   for all 25 adaptations.
-- `dist/0.4.0-alpha/staging/<stage>/verification`: installed native
+- `dist/0.5.0-alpha/staging/<stage>/verification`: installed native
   GUI/module/workbench checks and 13 command-line CAD cases.
 
-Extract `dist/0.4.0-alpha/Fission-Alpha-Windows-x64.zip` and open
+Extract `dist/0.5.0-alpha/Fission-Alpha-Windows-x64.zip` and open
 `Fission/bin/Fission.exe`. The companion `Fission-Alpha-source.zip` contains the
 matching applied engine/submodule and Fission source. `package-manifest.json`,
 `stage-manifest.json`, and `SOURCE_SHA256.json` record archive/native/source hashes.
 Native binaries under `bin`, `Mod`, and installed `lib` aliases are refreshed and
 verified. Final packaging repeats command-line CAD checks and tests both ZIPs.
 The runtime includes the editable machined-plate example and dependency licenses,
-notices, and SBOM. Earlier 0.1, 0.2, and 0.3 artifacts are preserved. No remote push or
+notices, and SBOM. Earlier 0.1, 0.2, 0.3, and 0.4 artifacts are preserved. No remote push or
 upstream submission was made.
 
 ## Prior evidence and remaining scope

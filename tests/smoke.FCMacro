@@ -566,6 +566,15 @@ def run_fission_smoke():
                     lambda: search_workflows.modeling(controller, settle, report.output))
         report.case("Search launches native Sketch Line with Browser-to-canvas focus and Finish Sketch",
                     lambda: search_workflows.sketch(controller, settle, report.output))
+        import history_workflows
+        report.case("Browser and Timeline arrows inline rename typing Cancel Undo and FCStd",
+                    lambda: history_workflows.rename_and_selection(controller, settle, report.output))
+        report.case("Browser and Timeline Enter native preview Cancel OK and task guards",
+                    lambda: history_workflows.modeling(controller, settle, report.output))
+        report.case("Panel Delete native dependencies multi-selection Undo and pending guard",
+                    lambda: history_workflows.deletion(controller, settle, report.output))
+        report.case("Panel Create sketch native task scoped to active empty component",
+                    lambda: history_workflows.component_sketch(controller, settle, report.output))
         App.setActiveDocument(doc.Name)
         controller.refresh_context()
         settle()

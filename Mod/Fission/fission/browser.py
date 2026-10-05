@@ -31,6 +31,39 @@ def object_tooltip(obj):
     return "\n".join(lines)
 
 
+class _LabelDelegate(QtWidgets.QStyledItemDelegate):
+    """Edit the authoritative Label, never a Timeline decoration or stale row."""
+
+    def __init__(self, dock, view):
+        super().__init__(view)
+        self.dock = dock
+
+    def createEditor(self, parent, option, index):
+        if index.column() != 0:
+            return None
+        obj = self.dock._object(index.data(QtCore.Qt.UserRole))
+        if obj is None or not self.dock._mutation_allowed([obj], "renaming an object"):
+            return None
+        editor = QtWidgets.QLineEdit(parent)
+        editor._fission_object = obj
+        editor._fission_key = object_key(obj)
+        editor.setAccessibleName("Rename " + obj.Label)
+        return editor
+
+    def setEditorData(self, editor, index):
+        editor.setText(editor._fission_object.Label)
+        editor.selectAll()
+
+    def setModelData(self, editor, model, index):
+        # An editor can survive a document switch or deletion until Qt closes
+        # it. Do not resolve the same name to a replacement object at commit.
+        obj = editor._fission_object
+        if self.dock._object(editor._fission_key) is not obj:
+            self.dock.schedule_refresh()
+            return
+        self.dock._rename_object(obj, editor.text())
+
+
 class _DocumentDock(QtWidgets.QDockWidget):
     """Observe App, view providers and selection without polling or rebuilding."""
 
@@ -40,6 +73,8 @@ class _DocumentDock(QtWidgets.QDockWidget):
         self._closed = False
         self._syncing = False
         self._document_name = None
+        self._document = None
+        self._document_view = None
         self._refresh_timer = QtCore.QTimer(self)
         self._refresh_timer.setSingleShot(True)
         self._refresh_timer.setInterval(70)
@@ -96,10 +131,130 @@ class _DocumentDock(QtWidgets.QDockWidget):
         if not key or len(key) != 2:
             return None
         try:
+            if self._document is None or App.ActiveDocument is not self._document:
+                return None
             document = App.getDocument(key[0])
-            return document.getObject(key[1]) if document else None
+            return document.getObject(key[1]) if document is self._document else None
         except (NameError, RuntimeError):
             return None
+
+    def _install_document_keys(self, view):
+        self._document_view = view
+        # ShortcutManager defers these panel keys before resolving global
+        # bindings; ShortcutOverride also protects against native QActions.
+        view.setProperty("fissionDocumentPanelKeys", True)
+        view.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
+        self._label_delegate = _LabelDelegate(self, view)
+        view.setItemDelegate(self._label_delegate)
+        view.installEventFilter(self)
+
+    def _selected_objects(self):
+        view = self._document_view
+        objects = []
+        for item in view.selectedItems():
+            if item.isHidden():
+                continue
+            key = item.data(0, QtCore.Qt.UserRole) if isinstance(item, QtWidgets.QTreeWidgetItem) else item.data(QtCore.Qt.UserRole)
+            obj = self._object(key)
+            if obj is not None:
+                objects.append(obj)
+        return objects
+
+    def _single_selected(self):
+        objects = self._selected_objects()
+        if len(objects) == 1:
+            return objects[0]
+        if len(objects) > 1:
+            self.controller.notify("Select one object to edit or rename.")
+        return None
+
+    def eventFilter(self, watched, event):
+        if watched is not self._document_view or self._closed:
+            return super().eventFilter(watched, event)
+        if event.type() not in (QtCore.QEvent.ShortcutOverride, QtCore.QEvent.KeyPress):
+            return False
+        # Delegate editors own their Return, Escape, Delete and typing. The
+        # view can receive a propagated event even while its editor has focus.
+        focus = QtWidgets.QApplication.focusWidget()
+        if focus not in (watched, watched.viewport()):
+            return False
+        modifiers = event.modifiers() & (QtCore.Qt.ControlModifier | QtCore.Qt.AltModifier | QtCore.Qt.ShiftModifier | QtCore.Qt.MetaModifier)
+        navigation = (QtCore.Qt.Key_Left, QtCore.Qt.Key_Right, QtCore.Qt.Key_Up, QtCore.Qt.Key_Down,
+                      QtCore.Qt.Key_Home, QtCore.Qt.Key_End, QtCore.Qt.Key_PageUp, QtCore.Qt.Key_PageDown)
+        if event.key() in navigation and not modifiers & (QtCore.Qt.AltModifier | QtCore.Qt.MetaModifier):
+            if event.type() == QtCore.QEvent.ShortcutOverride:
+                # Native camera rotation uses Shift+Left/Right, and view
+                # commands also claim Ctrl+arrows. Here Qt owns navigation
+                # and range selection while the panel has keyboard focus.
+                event.accept()
+                return True
+            return False
+        if modifiers or event.key() not in (QtCore.Qt.Key_Return, QtCore.Qt.Key_Enter, QtCore.Qt.Key_F2, QtCore.Qt.Key_Delete):
+            return False
+        event.accept()
+        if event.type() == QtCore.QEvent.ShortcutOverride or event.isAutoRepeat():
+            return True
+        if event.key() == QtCore.Qt.Key_Delete:
+            self._delete_selected()
+        else:
+            obj = self._single_selected()
+            if obj is not None:
+                if event.key() == QtCore.Qt.Key_F2:
+                    self._rename_selected(obj)
+                else:
+                    self._enter_object(obj)
+        # Empty, synthetic and stale rows also consume these keys. They must
+        # not fall through to a native command acting on unrelated selection.
+        return True
+
+    def _mutation_allowed(self, objects, action, allow_assembly=True):
+        if not objects:
+            return False
+        try:
+            for obj in objects:
+                if obj.Document is not self._document or self._object(object_key(obj)) is not obj:
+                    self.schedule_refresh()
+                    return False
+                gui_doc = Gui.getDocument(obj.Document.Name)
+                edit = gui_doc.getInEdit() if gui_doc else None
+                idle_assembly = allow_assembly and edit and derived(getattr(edit, "Object", None), "Assembly::AssemblyObject")
+                if obj.Document.HasPendingTransaction or Gui.Control.activeDialog() or (edit and not idle_assembly):
+                    self.controller.notify("Finish or cancel the active modeling operation before {}.".format(action))
+                    self.schedule_refresh()
+                    return False
+        except (AttributeError, RuntimeError):
+            self.schedule_refresh()
+            return False
+        return True
+
+    def _rename_object(self, obj, label):
+        label = label.strip()
+        if label and label != obj.Label:
+            self._transaction(obj, "Rename object", lambda: setattr(obj, "Label", label))
+        self.schedule_refresh()
+
+    def _delete_selected(self):
+        objects = self._selected_objects()
+        if self._mutation_allowed(objects, "deleting objects"):
+            self._select(objects)
+            # One native invocation preserves the full set, dependency
+            # confirmation and a single native Undo transaction.
+            self.controller.execute("Std_Delete")
+
+    def _sync_current(self, view, selected):
+        current = view.currentItem()
+        key = current.data(0, QtCore.Qt.UserRole) if isinstance(current, QtWidgets.QTreeWidgetItem) else current.data(QtCore.Qt.UserRole) if current else None
+        if key in selected and not current.isHidden():
+            return current
+        for selected_key, item in self._items.items():
+            if selected_key in selected and not item.isHidden():
+                view.selectionModel().setCurrentIndex(view.indexFromItem(item), QtCore.QItemSelectionModel.NoUpdate)
+                return item
+        return None
+
+    def _edit_object(self, obj):
+        if self._mutation_allowed([obj], "editing history", allow_assembly=False):
+            self.controller.edit_object(obj)
 
     def _select(self, objects):
         if self._syncing:
@@ -115,13 +270,10 @@ class _DocumentDock(QtWidgets.QDockWidget):
         self.controller.refresh_context()
 
     def _transaction(self, obj, title, operation, recompute=False):
-        document = obj.Document
-        # A native feature task owns its open modeling transaction. Opening a
-        # new one here would commit that task prematurely and damage Undo.
-        if getattr(document, "HasPendingTransaction", False):
-            self.controller.notify("Finish or cancel the active modeling operation before {}.".format(title.lower()))
-            self.schedule_refresh()
+        if not self._mutation_allowed([obj], title.lower()):
             return
+        document = obj.Document
+        # The guard leaves an active feature task's transaction untouched.
         try:
             document.openTransaction(title)
             operation()
@@ -143,6 +295,15 @@ class _DocumentDock(QtWidgets.QDockWidget):
             self._transaction(obj, "Toggle feature suppression", lambda: setattr(obj, "Suppressed", not obj.Suppressed), True)
 
     def _activate(self, obj):
+        try:
+            if self._object(object_key(obj)) is not obj:
+                self.schedule_refresh()
+                return
+        except (AttributeError, RuntimeError):
+            self.schedule_refresh()
+            return
+        if not derived(obj, "Assembly::AssemblyObject") and not self._mutation_allowed([obj], "activating an object"):
+            return
         try:
             gui_doc = Gui.getDocument(obj.Document.Name)
             view = gui_doc.activeView()
@@ -187,14 +348,15 @@ class _DocumentDock(QtWidgets.QDockWidget):
             self.controller.notify("Could not activate {}: {}".format(obj.Label, exc))
 
     def _delete(self, obj):
-        self._select([obj])
-        # Std_Delete owns transactions, dependency prompts and edit-mode safety.
-        self.controller.execute("Std_Delete")
+        if not self._selected_objects() and self._mutation_allowed([obj], "deleting objects"):
+            self._select([obj])
+            self.sync_selection()
+        self._delete_selected()
 
     def _menu(self, obj, position, rename=None, history_explanation=None):
         menu = QtWidgets.QMenu(self)
         if obj is not None:
-            menu.addAction("Edit feature", lambda: self.controller.edit_object(obj))
+            menu.addAction("Edit feature", lambda: self._edit_object(obj))
             if rename is not None:
                 menu.addAction("Rename", rename)
             if derived(obj, "PartDesign::Body") or derived(obj, "App::Part"):
@@ -205,7 +367,7 @@ class _DocumentDock(QtWidgets.QDockWidget):
             if supports_suppression(obj):
                 menu.addAction("Unsuppress feature" if obj.Suppressed else "Suppress feature", lambda: self._toggle_suppression(obj))
             menu.addSeparator()
-        menu.addAction("Create sketch", lambda: self.controller.execute("PartDesign_NewSketch"))
+        menu.addAction("Create sketch", lambda: self.controller.execute("Fission_CreateSketch"))
         menu.addAction("Create body", lambda: self.controller.execute("PartDesign_Body"))
         menu.addAction("Create component", lambda: self.controller.execute("Std_Part"))
         if obj is not None:
@@ -242,11 +404,11 @@ class Browser(_DocumentDock):
         self.tree.setIndentation(14)
         self.tree.setAlternatingRowColors(False)
         self.tree.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
-        self.tree.setEditTriggers(QtWidgets.QAbstractItemView.EditKeyPressed)
         self.tree.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
         self.tree.setDragDropMode(QtWidgets.QAbstractItemView.NoDragDrop)
         self.tree.setUniformRowHeights(True)
         self.tree.setIconSize(QtCore.QSize(18, 18))
+        self._install_document_keys(self.tree)
         self.tree.itemSelectionChanged.connect(self._from_tree)
         self.tree.itemChanged.connect(self._item_changed)
         self.tree.itemDoubleClicked.connect(self._double_clicked)
@@ -262,8 +424,9 @@ class Browser(_DocumentDock):
             return
         document = App.ActiveDocument
         name = document.Name if document else None
-        switched = name != self._document_name
+        switched = document is not self._document
         self._document_name = name
+        self._document = document
         records = browser_records(document)
         desired = {record.key for record in records}
         active_keys = set()
@@ -371,10 +534,9 @@ class Browser(_DocumentDock):
                     while ancestor:
                         ancestor.setExpanded(True)
                         ancestor = ancestor.parent()
-            for key in selected:
-                if key in self._items:
-                    self.tree.scrollToItem(self._items[key])
-                    break
+            current = self._sync_current(self.tree, selected)
+            if current is not None:
+                self.tree.scrollToItem(current)
         finally:
             self.tree.blockSignals(False)
             self._syncing = False
@@ -403,14 +565,22 @@ class Browser(_DocumentDock):
     def _double_clicked(self, item, column):
         obj = self._object(item.data(0, QtCore.Qt.UserRole))
         if obj is not None and column == 0:
-            if derived(obj, "PartDesign::Body") or derived(obj, "App::Part"):
-                self._activate(obj)
-            else:
-                self.controller.edit_object(obj)
+            self._enter_object(obj)
+
+    def _enter_object(self, obj):
+        if derived(obj, "PartDesign::Body") or derived(obj, "App::Part") or derived(obj, "Assembly::AssemblyObject"):
+            self._activate(obj)
+        else:
+            self._edit_object(obj)
+
+    def _rename_selected(self, obj):
+        if self._mutation_allowed([obj], "renaming an object"):
+            self.tree.editItem(self._items[object_key(obj)], 0)
 
     def _context_menu(self, point):
         item = self.tree.itemAt(point)
         obj = self._object(item.data(0, QtCore.Qt.UserRole)) if item else None
-        if obj:
+        if obj and item not in self.tree.selectedItems():
             self._select([obj])
-        self._menu(obj, self.tree.viewport().mapToGlobal(point), lambda: self.tree.editItem(item, 0) if item else None)
+            self.sync_selection()
+        self._menu(obj, self.tree.viewport().mapToGlobal(point), lambda: self._rename_selected(obj) if obj else None)

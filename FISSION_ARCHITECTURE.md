@@ -1,8 +1,8 @@
-# Fission 0.4 Alpha architecture
+# Fission 0.5 Alpha architecture
 
-Fission `0.4.0-alpha` builds the pinned FreeCAD C++ application with a small
+Fission `0.5.0-alpha` builds the pinned FreeCAD C++ application with a small
 identity/navigation patch and a shared native Qt shell for Design, Drawing,
-and Manufacture. Product labels use **Fission 0.4 Alpha**. The engine retains
+and Manufacture. Product labels use **Fission 0.5 Alpha**. The engine retains
 its upstream version for document migrations and FCStd compatibility.
 
 ## Core and presentation boundary
@@ -59,13 +59,24 @@ native Document.Objects creation order, preserving per-object Qt items and
 scroll/expansion state. App and Gui observers debounce changes; selection
 observers synchronize canvas, Browser and Timeline without feedback loops.
 
-Timeline double-click calls the native document's setEdit, reopening the actual
-feature task panel. Visibility and writable native Suppressed properties use
+Timeline double-click and Browser/Timeline Enter call the native document's
+setEdit, reopening the actual feature task panel. Visibility and writable native Suppressed properties use
 document transactions. Existing pending task transactions are protected.
 Feature and datum task dialogs are explicitly attached to their object's
 document, so editing history cannot bind a panel to another open document.
 PartDesign editors keep the Design workspace active while using native preview,
 OK, Cancel and Undo behavior.
+
+The document views claim unmodified Return/Enter/F2/Delete through local
+ShortcutOverride/KeyPress filters. The global shortcut dispatcher defers those
+keys only when the actual focused view has the document-panel property, so Custom
+bindings remain available outside the panels and inline editors keep text input.
+A shared Qt delegate reads the native Label instead of decorated item text and
+commits through one guarded document transaction. It captures the owner object's
+identity and checks it again before commit. Selection synchronization sets the
+current index with NoUpdate, preserving Qt extended selection. Native Std_Delete
+receives all selected visible object rows once and retains dependency prompts and
+Undo; tasks and pending transactions reject competing history operations.
 Native Assembly editing also retains Design. Its registered Python view-provider
 wrapper exposes native document-provider methods. TaskView keeps document-owned
 contextual solver panels after an operation dialog's OK/Cancel and shows them
@@ -184,15 +195,19 @@ tests save/reopen and interchange, and exposes the actual GUI Stitch
 accept/cancel/Undo/Redo case to the serial runner. Its App-only cases can run
 under `FissionCmd.exe` with `FISSION_SPECIALIST_AUTORUN=1`.
 
-The 0.4 build-tree and installed portable suites each passed 37 native GUI cases
-and separate restart checks; all 111 presentation/Qt tests and 26 native CTest
+The 0.5 build-tree and installed portable suites each passed 41 native GUI cases
+and separate restart checks; all 127 presentation/Qt tests and 26 native CTest
 executables passed. Canvas acceptance includes native concave selection, linked
 paint/escape paths, idle Assembly, actual Fillet tasks, actual Sketcher line clicks,
 configuration resets, stationary click guards after popup fitting, and New Design
 from Drawing. `scripts/test-gui.ps1 -CanvasOnly` runs four focused canvas groups.
 Command search adds actual native Fillet tasks, Sketcher line clicks, readiness,
 focus and document-lifetime checks. `scripts/test-gui.ps1 -SearchOnly` runs three
-focused search groups. Primary installed reports are in `test-output/search-portable`.
+focused search groups. Primary installed reports are in `test-output/history-portable`.
+`scripts/test-gui.ps1 -HistoryOnly` runs four focused document-panel keyboard
+groups. They exercise real label editors and selection keys, native feature
+preview/Cancel/OK, dependency warning rejection, multi-object Delete with one Undo,
+task/pending guards, and component-scoped Create Sketch from the shared menu.
 
 Earlier native acceptance for the 0.2 workspace, Stitch, cube, and navigation-strip
 controls was exercised on October 4, 2026. The targeted workspace run passed

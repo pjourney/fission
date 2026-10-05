@@ -1,8 +1,18 @@
-# Fission 0.4 Alpha keyboard shortcuts
+# Fission 0.5 Alpha keyboard shortcuts
 
 Fission / Fusion is the default profile. These defaults come from Autodesk's public [Fusion keyboard reference](https://help.autodesk.com/cloudhelp/ENU/Fusion-GetStarted/files/GUID-F0491540-0324-470A-B651-2238D0EFAC30.htm), checked on October 3, 2026. They describe behavior; Fission includes no Autodesk icons, artwork, or application assets.
 
 The table records the implemented dispatcher mapping. Actual operation availability still depends on the active document, selection, and installed FreeCAD modules. The pure profile tests verify dispatch resolution and persistence; the GUI/modeling smoke suite verifies native invocation separately.
+
+In the Browser and Timeline, **Enter** edits one selected feature (**Enter** on a
+Browser body/component/assembly activates it), **F2** renames inline, and **Delete**
+invokes native deletion for the full selection. These unmodified keys retain their
+panel meaning in Fission, Custom, and Classic profiles. Custom assignments still
+work elsewhere. Arrow keys and Shift selection remain native Qt navigation.
+Inline label editors retain normal text keys; Return commits and Escape cancels.
+Active modeling tasks and pending transactions protect their history ownership.
+Arrow/Home/End/Page navigation with Ctrl/Shift also belongs to these panels while
+focused, taking precedence over camera shortcuts or Custom assignments.
 
 | Fusion command | Default | Fission command | Context | State / difference |
 |---|---|---|---|---|
@@ -127,6 +137,6 @@ Run `python -m unittest discover -s tests -p test_shortcuts.py -v` for determini
 
 For real Qt event tests, set `FISSION_QT_TESTS=1` and `QT_QPA_PLATFORM=offscreen`, then run the same command with the LibPack Python runtime. These cover three-preset selection and persistence, legacy profile migration, dispatch through real Qt key events, stock-action collision/restoration, lazy action registration, typing in native editors, reserved-key handling, preferences rendering, and keyboard command search. The execution spy verifies dispatched IDs; geometry completion requires native CAD workflow tests.
 
-Run `scripts/test-gui.ps1` against the built or staged application for modeling and restart persistence. Use `scripts/test-gui.ps1 -SearchOnly` for three focused native toolbox groups, or `-WorkspacesOnly` for Drawing/CAM controls. The full runner also exercises the actual Stitch dialog with whole-object and face selections, tolerance editing, Cancel/OK, Undo/Redo, and FCStd save/reopen.
+Run `scripts/test-gui.ps1` against the built or staged application for modeling and restart persistence. Use `-HistoryOnly` for four document-panel keyboard groups, `-SearchOnly` for three native toolbox groups, or `-WorkspacesOnly` for Drawing/CAM controls. The full runner also exercises the actual Stitch dialog with whole-object and face selections, tolerance editing, Cancel/OK, Undo/Redo, and FCStd save/reopen.
 
-On October 5, 2026, the integrated native GUI suite passed all 37 cases, including native search-launched Fillet transactions, Sketcher canvas input, Drawing/CAM operations, Assembly, Stitch, selection and marking menus. Separate processes verified persisted search history and settings. The combined unit/Qt suite passed 111 tests. This is selected-tool acceptance; broader catalog commands and custom shortcuts still need native operation coverage. Check FISSION_STATUS.md and the generated JSON reports for the tested build.
+On October 5, 2026, the integrated native GUI suite passed all 41 cases, including native search-launched Fillet transactions, Sketcher canvas input, Drawing/CAM operations, Assembly, Stitch, selection and marking menus. Separate processes verified persisted search history and settings. The combined unit/Qt suite passed 127 tests. This is selected-tool acceptance; broader catalog commands and custom shortcuts still need native operation coverage. Check FISSION_STATUS.md and the generated JSON reports for the tested build.

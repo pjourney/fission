@@ -346,6 +346,66 @@ class NativeQtShortcutTests(unittest.TestCase):
         self.assertEqual(self.editors[2].toPlainText(), "e")
         self.assertEqual(self.editors[3].toPlainText(), "e")
 
+    def test_document_panel_keys_defer_custom_dispatch_only_in_panel(self):
+        received = []
+        QtCore = self.QtCore
+
+        class PanelKeys(QtCore.QObject):
+            def eventFilter(self, obj, event):
+                if (event.type() in (QtCore.QEvent.ShortcutOverride, QtCore.QEvent.KeyPress)
+                        and not event.modifiers() & (QtCore.Qt.ControlModifier | QtCore.Qt.AltModifier |
+                                                     QtCore.Qt.ShiftModifier | QtCore.Qt.MetaModifier)
+                        and event.key() in (QtCore.Qt.Key_Return, QtCore.Qt.Key_Enter,
+                                            QtCore.Qt.Key_F2, QtCore.Qt.Key_Delete)):
+                    event.accept()
+                    if event.type() == QtCore.QEvent.KeyPress:
+                        received.append(event.key())
+                    return True
+                return False
+
+        observer = PanelKeys(self.canvas)
+        self.canvas.setProperty("fissionDocumentPanelKeys", True)
+        self.canvas.installEventFilter(observer)
+        self.manager.set_binding("Std_Delete", "")
+        for key, sequence, modifiers in ((QtCore.Qt.Key_Return, "Return", QtCore.Qt.NoModifier),
+                                         (QtCore.Qt.Key_Enter, "Return", QtCore.Qt.NoModifier),
+                                         (QtCore.Qt.Key_Enter, "Return", QtCore.Qt.KeypadModifier),
+                                         (QtCore.Qt.Key_F2, "F2", QtCore.Qt.NoModifier),
+                                         (QtCore.Qt.Key_Delete, "Delete", QtCore.Qt.NoModifier)):
+            with self.subTest(sequence=sequence, key=key):
+                self.manager.set_binding("Fission_Extrude", sequence)
+                self.called.clear()
+                self.press(key, modifiers=modifiers)
+                self.assertEqual(self.called, [])
+                self.assertEqual(received[-1], key)
+                self.canvas.setProperty("fissionDocumentPanelKeys", False)
+                self.canvas.removeEventFilter(observer)
+                self.press(key, modifiers=modifiers)
+                self.assertEqual(self.called, ["Fission_Extrude"])
+                self.canvas.setProperty("fissionDocumentPanelKeys", True)
+                self.canvas.installEventFilter(observer)
+
+    def test_document_panel_navigation_defers_custom_shortcuts(self):
+        received = []
+        QtCore = self.QtCore
+
+        class Navigation(QtCore.QObject):
+            def eventFilter(self, obj, event):
+                if event.type() == QtCore.QEvent.KeyPress and event.key() == QtCore.Qt.Key_Right:
+                    received.append(event.key())
+                return False
+
+        observer = Navigation(self.canvas)
+        self.canvas.installEventFilter(observer)
+        self.manager.set_binding("Fission_Extrude", "Shift+Right")
+        self.canvas.setProperty("fissionDocumentPanelKeys", True)
+        self.press(QtCore.Qt.Key_Right, modifiers=QtCore.Qt.ShiftModifier)
+        self.assertEqual(received, [QtCore.Qt.Key_Right])
+        self.assertEqual(self.called, [])
+        self.canvas.setProperty("fissionDocumentPanelKeys", False)
+        self.press(QtCore.Qt.Key_Right, modifiers=QtCore.Qt.ShiftModifier)
+        self.assertEqual(self.called, ["Fission_Extrude"])
+
     def test_reserved_key_cannot_trigger_unrelated_native_action(self):
         action = self.QtGui.QAction("Unrelated stock joint command", self.main)
         action.setShortcut("Shift+J")

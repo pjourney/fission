@@ -48,6 +48,7 @@ class Timeline(_DocumentDock):
         self.list.setUniformItemSizes(True)
         self.list.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
         self.list.setAccessibleName("Parametric feature history in document creation order")
+        self._install_document_keys(self.list)
         self.list.itemSelectionChanged.connect(self._from_list)
         self.list.itemDoubleClicked.connect(self._edit_item)
         self.list.customContextMenuRequested.connect(self._context_menu)
@@ -60,8 +61,9 @@ class Timeline(_DocumentDock):
             return
         document = App.ActiveDocument
         name = document.Name if document else None
-        switched = self._document_name != name
+        switched = document is not self._document
         self._document_name = name
+        self._document = document
         self._features = chronological_features(document)
         desired = {object_key(obj) for obj in self._features}
         self._syncing = True
@@ -90,6 +92,7 @@ class Timeline(_DocumentDock):
                 elif self.list.row(item) != index:
                     self.list.takeItem(self.list.row(item))
                     self.list.insertItem(index, item)
+                item.setFlags(QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable | QtCore.Qt.ItemIsEditable)
                 state, message = feature_state(obj)
                 marker = "▶ " if key == edit else "◆ " if key in tips else ""
                 item.setText(marker + obj.Label)
@@ -108,7 +111,7 @@ class Timeline(_DocumentDock):
                 item.setForeground(QtGui.QBrush(QtGui.QColor("#e3656f") if state == "error" else QtGui.QColor("#dda957") if state == "touched" else self.list.palette().color(QtGui.QPalette.Text)))
             self.recompute_button.setEnabled(document is not None)
             self.description.setText(
-                "{} feature{} · ◆ Body tip · Double-click to edit".format(len(self._features), "" if len(self._features) == 1 else "s")
+                "{} feature{} · ◆ Body tip · Enter: edit · F2: rename · Delete: remove".format(len(self._features), "" if len(self._features) == 1 else "s")
                 if self._features else "Create a sketch or a modeling feature to begin this design" if document else "Create or open a design to view its feature history"
             )
             self.description.setToolTip("Native document creation order. Body tips are current results; the timeline does not simulate rollback.")
@@ -126,10 +129,9 @@ class Timeline(_DocumentDock):
         try:
             for key, item in self._items.items():
                 item.setSelected(key in selected)
-            for key in selected:
-                if key in self._items:
-                    self.list.scrollToItem(self._items[key])
-                    break
+            current = self._sync_current(self.list, selected)
+            if current is not None:
+                self.list.scrollToItem(current)
         finally:
             self.list.blockSignals(False)
             self._syncing = False
@@ -140,18 +142,21 @@ class Timeline(_DocumentDock):
     def _edit_item(self, item):
         obj = self._object(item.data(QtCore.Qt.UserRole))
         if obj:
-            self.controller.edit_object(obj)
+            self._enter_object(obj)
 
-    def _rename(self, obj):
-        label, accepted = QtWidgets.QInputDialog.getText(self, "Rename feature", "Name", QtWidgets.QLineEdit.Normal, obj.Label)
-        if accepted and label.strip():
-            self._transaction(obj, "Rename feature", lambda: setattr(obj, "Label", label.strip()))
+    def _enter_object(self, obj):
+        self._edit_object(obj)
+
+    def _rename_selected(self, obj):
+        if self._mutation_allowed([obj], "renaming a feature"):
+            self.list.editItem(self._items[object_key(obj)])
 
     def _context_menu(self, point):
         item = self.list.itemAt(point)
         obj = self._object(item.data(QtCore.Qt.UserRole)) if item else None
-        if obj:
+        if obj and item not in self.list.selectedItems():
             self._select([obj])
+            self.sync_selection()
         index = self.list.row(item) if item else -1
         reason = reorder_explanation(self._features, index) if obj else None
-        self._menu(obj, self.list.viewport().mapToGlobal(point), lambda: self._rename(obj), reason)
+        self._menu(obj, self.list.viewport().mapToGlobal(point), lambda: self._rename_selected(obj) if obj else None, reason)
