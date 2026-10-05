@@ -1,4 +1,4 @@
-# Fission 0.2 Alpha keyboard shortcuts
+# Fission 0.3 Alpha keyboard shortcuts
 
 Fission / Fusion is the default profile. These defaults come from Autodesk's public [Fusion keyboard reference](https://help.autodesk.com/cloudhelp/ENU/Fusion-GetStarted/files/GUID-F0491540-0324-470A-B651-2238D0EFAC30.htm), checked on October 3, 2026. They describe behavior; Fission includes no Autodesk icons, artwork, or application assets.
 
@@ -43,6 +43,35 @@ The table records the implemented dispatcher mapping. Actual operation availabil
 | Dimension | D | TechDraw_Dimension | Drawing | Native drawing dimension |
 | Text | T | TechDraw_Annotation | Drawing | Native drawing annotation |
 | Balloon | B | TechDraw_Balloon | Drawing | Native drawing balloon |
+| Window Selection | 1 | Fission_WindowSelection | Idle 3D model / assembly / surface / mesh / CAM | Native rectangle, projected-center and crossing behavior; Ctrl adds |
+| Freeform Selection | 2 | Fission_FreeformSelection | Idle 3D model / assembly / surface / mesh / CAM | Native freehand polygon, projected object centers; Ctrl adds |
+| Paint Selection | 3 | Fission_PaintSelection | Idle 3D model / assembly / surface / mesh / CAM | One left-drag stroke selects frontmost objects through native ray picking; Ctrl adds, Escape restores |
+
+## Marking menu
+
+Alt + right-click opens Fission's original compass menu on a native 3D canvas
+with the Fission mouse preset and Fission / Fusion or Custom profile. A right
+drag/release chooses a sector; a click opens it for a subsequent left-click.
+Escape or a center click closes it. Plain right-click and native modified camera
+gestures remain available. FreeCAD Classic leaves the chord to native navigation.
+The navigation-strip button and the customizable `Fission_MarkingMenu` command
+work with other mouse presets. Drawing sheet views keep their native interaction;
+the menu can open on a 3D view beneath the Drawing workspace.
+
+Preferences → Marking Menu configures eight fixed compass slots for each of
+seven contexts. Empty and unavailable slots stay in their positions. Availability
+follows native commands and the current selection/task; an unavailable command
+cannot run. Settings and resets take effect on OK; Cancel discards staged edits.
+Stored command IDs survive restart and temporarily missing addons. The menu
+closes before dispatch through the normal command controller, so native tools
+own their task dialogs and Undo transactions.
+
+Selection modes 1/2/3 yield to Sketcher and active task dialogs. Rectangle/freehand
+selection considers projected object centers and may include occluded geometry;
+rectangle right-to-left uses native crossing behavior. Paint selects visible
+frontmost objects, samples between pointer events, preserves existing selection
+gates and link paths, and finishes on release. Escape restores the pre-stroke
+selection in that document. Other documents' selections are preserved.
 
 Fit uses **F6**, documented in Autodesk's [preferences reference](https://help.autodesk.com/view/fusion360/ENU/index.html?guid=GUID-878489CD-3A23-4303-8450-C2F4F8E410B1). It dispatches `Fission_Fit` in all contexts. See the navigation preferences for MMB pan, Shift+MMB orbit, wheel zoom, and Ctrl+Shift+MMB drag zoom.
 
@@ -68,7 +97,7 @@ The active preset and custom edits persist under `User parameter:BaseApp/Prefere
 
 ## Explicit gaps
 
-- Shift+N (Component Colors), Shift+J (As-built Joint), Shift+S (Scripts/Add-ins), selection modes 1/2/3, and shell toggles for comments/data panel/text commands remain reserved. Pressing a reserved key shows a status message. Reserved rows are labeled in preferences and can be cleared. Ctrl+Alt+V, Ctrl+Alt+N, and Ctrl+[ / Ctrl+] are implemented as described above.
+- Shift+N (Component Colors), Shift+J (As-built Joint), Shift+S (Scripts/Add-ins), and shell toggles for comments/data panel/text commands remain reserved. Pressing a reserved key shows a status message. Reserved rows are labeled in preferences and can be cleared. Selection modes 1/2/3, Ctrl+Alt+V, Ctrl+Alt+N, and Ctrl+[ / Ctrl+] are implemented as described above.
 - Shift for midpoint coincidence is a transient sketch modifier, not a standalone action. Fission preserves FreeCAD's native sketch constraints; exact Fusion inference behavior is not implemented.
 - Autodesk's current default reference lists no Create Sketch, Finish Sketch, Revolve, Chamfer, Shell, or Pattern key. These commands and Stitch are available through toolbar/search; their customizable defaults remain blank.
 - Ctrl++ and Ctrl+- in that reference belong to Autodesk Assistant, not the CAD canvas. Fission does not claim them as canvas defaults.

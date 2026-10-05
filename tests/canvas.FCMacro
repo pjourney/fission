@@ -1,0 +1,67 @@
+# SPDX-License-Identifier: LGPL-2.1-or-later
+"""Focused native canvas interaction acceptance with an isolated profile."""
+import importlib
+import json
+import os
+from pathlib import Path
+import sys
+import traceback
+import FreeCAD as App
+import FreeCADGui as Gui
+from PySide import QtCore, QtWidgets
+try:
+    from PySide import QtTest
+except ImportError:
+    QtTest = importlib.import_module("PySide6.QtTest")
+ROOT = Path(os.environ["FISSION_SOURCE_ROOT"])
+OUTPUT = Path(os.environ["FISSION_TEST_OUTPUT"])
+sys.path.insert(0, str(ROOT / "tests"))
+
+
+def settle(milliseconds=100):
+    QtWidgets.QApplication.processEvents()
+    QtTest.QTest.qWait(milliseconds)
+    QtCore.QCoreApplication.sendPostedEvents(None, QtCore.QEvent.DeferredDelete)
+
+
+def run():
+    rows = []
+    try:
+        Gui.activateWorkbench("FissionWorkbench")
+        from fission.shell import get_controller
+        import selection_workflow, marking_workflow, sketch_marking_workflow, canvas_workflows
+        controller = get_controller()
+        controller.main.showNormal()
+        controller.main.resize(1800, 1000)
+        controller.main.activateWindow()
+        settle(300)
+        cases = [("Native rectangle freehand and paint selection", selection_workflow.run),
+                 ("Marking menu and native CAD dispatch", marking_workflow.run),
+                 ("Native sketch marking menu and canvas geometry", sketch_marking_workflow.run),
+                 ("Canvas preferences", canvas_workflows.settings)]
+        for name, function in cases:
+            try:
+                result = function(controller, settle, OUTPUT)
+                rows.append({"name": name, "status": "passed", "details": result})
+            except Exception as error:
+                rows.append({"name": name, "status": "failed", "error": str(error), "traceback": traceback.format_exc()})
+                App.Console.PrintError(rows[-1]["traceback"] + "\n")
+    except Exception as error:
+        rows.append({"name": "Canvas runner", "status": "failed", "error": str(error), "traceback": traceback.format_exc()})
+        App.Console.PrintError(rows[-1]["traceback"] + "\n")
+    finally:
+        report = {"passed": sum(row["status"] == "passed" for row in rows),
+                  "failed": sum(row["status"] == "failed" for row in rows), "cases": rows,
+                  "executable_root": App.getHomePath(), "process_id": os.getpid()}
+        (OUTPUT / "canvas-results.json").write_text(json.dumps(report, indent=2, default=str) + "\n", encoding="utf-8")
+        (OUTPUT / "canvas-complete.txt").write_text("PASS\n" if rows and not report["failed"] else "FAIL\n", encoding="utf-8")
+        for name in list(App.listDocuments()):
+            gui_doc = Gui.getDocument(name)
+            if gui_doc.getInEdit():
+                gui_doc.resetEdit()
+                Gui.Control.closeDialog()
+            App.closeDocument(name)
+        QtCore.QTimer.singleShot(180, QtWidgets.QApplication.instance().quit)
+
+
+QtCore.QTimer.singleShot(1800, run)

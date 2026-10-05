@@ -550,6 +550,15 @@ def run_fission_smoke():
                     lambda: specialist_workflows.run_stitch(controller, settle, report.output / "stitch"))
         report.case("Workspace keyboard cycling, task guard and native cube/navigation visibility controls",
                     lambda: workspace_workflows.navigation_controls(controller, settle, report.output))
+        import selection_workflow, marking_workflow, sketch_marking_workflow, canvas_workflows
+        report.case("Native rectangle, concave freehand and paint canvas selection with Ctrl Escape gates and unchanged geometry",
+                    lambda: selection_workflow.run(controller, settle, report.output))
+        report.case("Canvas marking menu native gesture command dispatch cancellation and geometry task ownership",
+                    lambda: marking_workflow.run(controller, settle, report.output))
+        report.case("Sketch marking menu creates a native line through canvas clicks and finishes the actual sketch task",
+                    lambda: sketch_marking_workflow.run(controller, settle, report.output))
+        report.case("Marking menu preference commits resets cancellation and unchanged wheel zoom",
+                    lambda: canvas_workflows.settings(controller, settle, report.output))
         App.setActiveDocument(doc.Name)
         controller.refresh_context()
         settle()
@@ -565,8 +574,12 @@ def run_fission_smoke():
             camera = view.getCameraNode()
             initial = float(camera.height.getValue())
             camera.height = initial * 4
+            controller.main.raise_()
+            controller.main.activateWindow()
             controller.browser.tree.setFocus()
-            settle(60)
+            settle(100)
+            cad.require(QtWidgets.QApplication.focusWidget() is controller.browser.tree,
+                        "Fit probe must restore real Browser focus after modal preference tests")
             QtTest.QTest.keyClick(controller.browser.tree, QtCore.Qt.Key_F6)
             settle(140)
             cad.require(float(camera.height.getValue()) < initial * 2, "F6 must run actual Fit command through Qt event dispatch")

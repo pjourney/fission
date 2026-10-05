@@ -32,6 +32,10 @@ COMMANDS = {
     "Appearance": ("Appearance", "Std_SetAppearance", "Std_SetAppearance", "material color", "model"),
     "Visibility": ("Toggle Visibility", "Std_ToggleVisibility", "Std_ToggleVisibility", "show hide", "all"),
     "Search": ("Command Search", None, "Std_Search", "toolbox launcher", "all"),
+    "MarkingMenu": ("Marking Menu", None, "Std_Search", "radial compass Alt right-click", "all"),
+    "WindowSelection": ("Window Selection", None, "Std_BoxSelection", "rectangle select objects", "all"),
+    "FreeformSelection": ("Freeform Selection", None, "Std_BoxSelection", "freehand lasso select objects", "all"),
+    "PaintSelection": ("Paint Selection", None, "Std_BoxSelection", "brush frontmost objects", "all"),
     "Preferences": ("Fission Preferences", None, "preferences-system", "settings shortcuts theme units navigation", "all"),
     "About": ("About Fission", None, ICON, "license attribution", "all"),
     "EditFeature": ("Edit Feature", None, "Std_Edit", "history parameters", "all"),
@@ -82,7 +86,7 @@ class FissionCommand:
     def GetResources(self):
         title, backend, icon, aliases, context = COMMANDS[self.name]
         return {"MenuText": title, "ToolTip": title + " — " + aliases,
-                "Pixmap": icon, "CmdType": "NoTransaction ForEdit" if context in ("sketch", "assembly") or self.name in ("Extrude", "Cut", "ToggleViewCube", "ToggleNavigation", "PreviousWorkspace", "NextWorkspace") else "NoTransaction"}
+                "Pixmap": icon, "CmdType": "NoTransaction ForEdit" if context in ("sketch", "assembly") or self.name in ("Extrude", "Cut", "ToggleViewCube", "ToggleNavigation", "PreviousWorkspace", "NextWorkspace", "WindowSelection", "FreeformSelection", "PaintSelection", "MarkingMenu") else "NoTransaction"}
 
     def Activated(self):
         from .shell import get_controller
@@ -90,6 +94,17 @@ class FissionCommand:
 
     def IsActive(self):
         title, backend, icon, aliases, context = COMMANDS[self.name]
+        if self.name == "MarkingMenu":
+            from .shell import existing_controller
+            controller = existing_controller()
+            return bool(controller and hasattr(controller, "marking") and controller.marking.available())
+        if self.name in ("WindowSelection", "FreeformSelection", "PaintSelection"):
+            from .selection import can_select
+            if not can_select():
+                return False
+            backend = "Std_FreehandSelection" if self.name == "FreeformSelection" else "Std_BoxSelection"
+            command = Gui.Command.get(backend)
+            return bool(command and command.isActive())
         if self.name in ("NewDesign", "Search", "Preferences", "About", "ToggleBrowser", "ToggleTimeline", "ResetLayout", "ToggleNavigation", "PreviousWorkspace", "NextWorkspace"):
             return True
         if not App.ActiveDocument:
@@ -100,6 +115,8 @@ class FissionCommand:
                         and not App.ActiveDocument.HasPendingTransaction and not Gui.Control.activeDialog())
         if self.name in ("Move", "NewComponent") and App.ActiveDocument.HasPendingTransaction:
             return False
+        if self.name in ("Move", "EditFeature"):
+            return bool(Gui.Selection.getSelection()) and not Gui.Control.activeDialog()
         if self.name == "Stitch":
             doc = Gui.activeDocument()
             if App.ActiveDocument.HasPendingTransaction or Gui.Control.activeDialog() or (doc and doc.getInEdit()):

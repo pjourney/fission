@@ -20,7 +20,7 @@ its command-line companion is `FissionCmd.exe`.
 checkout is stored in `upstream-src`. Applying Fission creates branch
 `codex/fission-engine` and retains the FreeCAD remote as `upstream`. Engine
 version 27.1 and its document compatibility rules are preserved; the Fission
-presentation has its own 0.2 Alpha label.
+presentation has its own 0.3 Alpha label.
 
 Requirements are Windows x64, Git, PowerShell, curl, a Windows SDK, and Visual
 Studio C++ Build Tools with CMake and Ninja. Allow at least 25 GB of free space
@@ -83,7 +83,7 @@ idempotent and leaves the original source notices intact.
 
 Pinned Part Design source files use CRLF. Patch application uses
 `--ignore-space-change` to match context while retaining that source format.
-All 21 current source adaptations passed deterministic generation, fresh pinned
+All 25 current source adaptations passed deterministic generation, fresh pinned
 baseline application, normalized byte comparison with the live engine, and
 reverse checking. Evidence is in `test-output/assembly-patch-validation.json`.
 Repeat this validation when changing the patch; failed hunks are not ignored.
@@ -142,11 +142,11 @@ codes, and restores its temporary environment. Integrated JSON reports, native
 logs, FCStd/STEP/STL files, and screenshots are saved in `test-output`.
 
 On October 4, 2026, the branded engine passed all 26 CTest executables. Both the
-build-tree run and the final installed portable run passed 30/30 native GUI
+build-tree run and the final installed portable run passed 34/34 native GUI
 cases, followed by passing persistence writer and reader processes. Primary
-delivery evidence is in `test-output/iteration-portable/smoke-results.json` and
-`test-output/iteration-portable/persistence-report.json`; the earlier build-tree
-results remain in `test-output/iteration-full-8`.
+delivery evidence is in `test-output/canvas-portable/smoke-results.json` and
+`test-output/canvas-portable/persistence-report.json`; the build-tree
+results are in `test-output/canvas-full-4`.
 The integrated cases cover native feature preview/OK/Cancel/Undo, active component
 scoping, Browser/Timeline, Qt shortcuts, camera input, selected Drawing/CAM
 editors, Surface/Mesh geometry and files with live catalog checks, Assembly
@@ -168,37 +168,37 @@ to presentation.
 
 ## Portable package and matching source
 
-The verified 0.2 stage is
-`dist/0.2.0-alpha/staging/20261004-012143-745`. It passed native GUI/restart and
+The verified 0.3 runtime stage is
+`dist/0.3.0-alpha/staging/20261004-140915-354`. It passed native GUI/restart and
 installed-runtime checks, 13 geometry cases, and nine workbench activations.
 `verification/portable-gui-report.json`, `verification/cad/report.json`,
 `stage-manifest.json`, and `source-verification.json` retain installed-path,
-geometry, native-byte, and applied-source evidence. The stage verifies 509
-native paths, including 46 `lib` aliases, and 17,822 source files: 17,755 engine
-files and 67 Fission files. The earlier 0.1 delivery is preserved outside
-`dist/0.2.0-alpha`.
+geometry, native-byte, and applied-source evidence. The package manifests record
+verified native paths, `lib` aliases, and matching engine/Fission source hashes.
+The earlier 0.1 and 0.2 deliveries are preserved outside
+`dist/0.3.0-alpha`.
 
 Use the following procedure to stage, verify, and generate the final archives:
 
 ```powershell
 # Stage native runtime, notices, and the matching applied source first.
-.\scripts\package.ps1 -StageOnly -OutputDirectory dist\0.2.0-alpha
+.\scripts\package.ps1 -StageOnly -OutputDirectory dist\0.3.0-alpha
 
 # Use the stage path printed above. This launches the staged native GUI too.
-.\scripts\test-portable.ps1 -RuntimeDirectory '.\dist\0.2.0-alpha\staging\<stage>\Fission'
+.\scripts\test-portable.ps1 -RuntimeDirectory '.\dist\0.3.0-alpha\staging\<stage>\Fission'
 
 # Refresh UI/docs/source in that stage and create the final archives.
-.\scripts\package.ps1 -OutputDirectory dist\0.2.0-alpha -ReuseStageDirectory '.\dist\0.2.0-alpha\staging\<stage>'
+.\scripts\package.ps1 -OutputDirectory dist\0.3.0-alpha -ReuseStageDirectory '.\dist\0.3.0-alpha\staging\<stage>'
 ```
 
 The script runs the configured CMake install target into a fresh directory under
 `OutputDirectory/staging`, installs Fission UI files, includes root notices and dependency
 licenses/SBOM, and produces:
 
-- `dist/0.2.0-alpha/Fission-Alpha-Windows-x64.zip`, containing the complete portable runtime.
-- `dist/0.2.0-alpha/Fission-Alpha-source.zip`, containing the exact applied Fission/FreeCAD
+- `dist/0.3.0-alpha/Fission-Alpha-Windows-x64.zip`, containing the complete portable runtime.
+- `dist/0.3.0-alpha/Fission-Alpha-source.zip`, containing the exact applied Fission/FreeCAD
   source and recursive submodule files, patches, scripts, and notices.
-- `dist/0.2.0-alpha/package-manifest.json`, recording presentation version, source pin, patch hashes, executable
+- `dist/0.3.0-alpha/package-manifest.json`, recording presentation version, source pin, patch hashes, executable
   hash, archive hashes/sizes, and staging location.
 
 LibPack's generated installer contains absolute dependency destinations. Packaging

@@ -98,6 +98,12 @@ private:
 '''
 replace_file("src/Gui/Navigation/NavigationStyle.h", [
     ('class GuiExport RevitNavigationStyle:', declaration + 'class GuiExport RevitNavigationStyle:'),
+    ('''        Clip = 4,       /**< Clip objects using a lasso. */
+    };
+''', '''        Clip = 4,       /**< Clip objects using a lasso. */
+        Freehand = 5,   /**< Select objects using a dragged freehand outline. */
+    };
+'''),
 ])
 replace_file("src/Mod/Sketcher/Gui/ViewProviderSketch.cpp", [
     ('"if ActiveSketch.ViewObject.EditingWorkbench:\\n"',
@@ -387,6 +393,265 @@ replace_file("src/Mod/Assembly/Gui/ViewProviderAssembly.h", [
     QMetaObject::Connection workbenchConnection;
     fastsignals::connection connectActivatedVP;
     fastsignals::connection connectSolverUpdate;
+'''),
+])
+
+# General freehand selection uses the native transient selection handler.
+# Append enum values so existing selection modes retain their numeric identity.
+replace_file("src/Gui/View3DInventorViewer.h", [
+    ('''        Clip = 4,       /**< Clip objects using a lasso. */
+    };
+''', '''        Clip = 4,       /**< Clip objects using a lasso. */
+        Freehand = 5,   /**< Select objects using a dragged freehand outline. */
+    };
+'''),
+])
+replace_file("src/Gui/Navigation/NavigationStyle.cpp", [
+    ('''        case Clip:
+            mouseSelection = new PolyClipSelection();
+            break;
+        default:
+''', '''        case Clip:
+            mouseSelection = new PolyClipSelection();
+            break;
+        case Freehand: {
+            auto* freehand = new FreehandSelection();
+            freehand->setClosed(true);
+            mouseSelection = freehand;
+            break;
+        }
+        default:
+'''),
+])
+freehand_command = '''//===========================================================================
+// Std_FreehandSelection
+//===========================================================================
+
+DEF_STD_CMD_A(StdFreehandSelection)
+
+StdFreehandSelection::StdFreehandSelection()
+    : Command("Std_FreehandSelection")
+{
+    sGroup = "Standard-View";
+    sMenuText = QT_TR_NOOP("&Freehand Selection");
+    sToolTipText = QT_TR_NOOP("Selects objects inside a dragged freehand outline");
+    sWhatsThis = "Std_FreehandSelection";
+    sStatusTip = sToolTipText;
+    sPixmap = "edit-select-box";
+    eType = AlterSelection;
+}
+
+bool StdFreehandSelection::isActive()
+{
+    return canStartGeometricSelection();
+}
+
+static void doFreehandSelect(void* ud, SoEventCallback* cb)
+{
+    auto viewer = static_cast<Gui::View3DInventorViewer*>(cb->getUserData());
+    // A short stroke must not turn into the two-point rectangular selection.
+    if (viewer->getPolygon().size() >= 3) {
+        doSelect(ud, cb);
+    }
+}
+
+void StdFreehandSelection::activated(int iMsg)
+{
+    Q_UNUSED(iMsg);
+    auto view = qobject_cast<View3DInventor*>(getMainWindow()->activeWindow());
+    if (view) {
+        View3DInventorViewer* viewer = view->getViewer();
+        if (canStartGeometricSelection()) {
+            int mode = viewer->navigationStyle()->getViewingMode();
+            if (mode != Gui::NavigationStyle::IDLE) {
+                SoKeyboardEvent ev;
+                viewer->navigationStyle()->processEvent(&ev);
+            }
+
+            QCursor cursor = SelectionCallbackHandler::makeCursor(
+                viewer,
+                QSize(32, 32),
+                "edit-select-box-cross",
+                6,
+                6
+            );
+            SelectionCallbackHandler::Create(
+                viewer,
+                View3DInventorViewer::Freehand,
+                cursor,
+                doFreehandSelect,
+                nullptr
+            );
+        }
+    }
+}
+
+'''
+replace_file("src/Gui/CommandView.cpp", [
+    ('''public:
+    // Creates a selection handler used to implement the common behaviour of BoxZoom, BoxSelection
+''', '''public:
+    ~SelectionCallbackHandler()
+    {
+        QObject::disconnect(ownerDestroyed);
+    }
+
+    static bool isRunning()
+    {
+        return static_cast<bool>(currentSelectionHandler);
+    }
+
+    // Creates a selection handler used to implement the common behaviour of BoxZoom, BoxSelection
+'''),
+    ('''    void* userData;
+    bool prevSelectionEn;
+''', '''    void* userData;
+    bool prevSelectionEn;
+    bool freehandSelection {false};
+    QObject* ownerView {nullptr};
+    QMetaObject::Connection ownerDestroyed;
+'''),
+    ('''            currentSelectionHandler->fnCb = doFunction;
+            currentSelectionHandler->prevSelectionCursor = viewer->cursor();
+''', '''            currentSelectionHandler->fnCb = doFunction;
+            currentSelectionHandler->ownerView = viewer;
+            currentSelectionHandler->ownerDestroyed = QObject::connect(
+                viewer,
+                &QObject::destroyed,
+                qApp,
+                [](QObject* owner) {
+                    if (currentSelectionHandler && currentSelectionHandler->ownerView == owner) {
+                        // The render callbacks die with the viewer. Release the
+                        // shared handler without querying a disposing document.
+                        currentSelectionHandler.reset();
+                    }
+                }
+            );
+            currentSelectionHandler->freehandSelection
+                = selectionMode == View3DInventorViewer::Freehand;
+            currentSelectionHandler->prevSelectionCursor = viewer->cursor();
+'''),
+    ('''            if (mbe->getButton() == SoMouseButtonEvent::BUTTON1
+                && mbe->getState() == SoButtonEvent::UP) {
+                if (selectionHandler && selectionHandler->fnCb) {
+''', '''            // A freehand outline can also Finish/Cancel from its right-click
+            // menu. Its mouse model has already stopped before this callback.
+            const bool freehandMenuClosed = selectionHandler && selectionHandler->freehandSelection
+                && mbe->getButton() == SoMouseButtonEvent::BUTTON2 && !view->isSelecting();
+            if (mbe->getState() == SoButtonEvent::UP
+                && (mbe->getButton() == SoMouseButtonEvent::BUTTON1 || freehandMenuClosed)) {
+                if (selectionHandler && selectionHandler->fnCb) {
+'''),
+    ('            // No other mouse events available from Coin3D to implement right mouse up abort',
+     '            // Other mouse releases keep the current selection model unchanged.'),
+    ('''        Application::Instance->commandManager().testActive();
+        currentSelectionHandler = nullptr;
+''', '''        currentSelectionHandler = nullptr;
+        Application::Instance->commandManager().testActive();
+'''),
+    ('DEF_3DV_CMD(StdBoxSelection)', 'DEF_STD_CMD_A(StdBoxSelection)'),
+    ('DEF_3DV_CMD(StdBoxElementSelection)', 'DEF_STD_CMD_A(StdBoxElementSelection)'),
+    ('''void StdBoxSelection::activated(int iMsg)
+''', '''static bool canStartGeometricSelection()
+{
+    auto view = qobject_cast<View3DInventor*>(getMainWindow()->activeWindow());
+    auto viewer = view ? view->getViewer() : nullptr;
+    return viewer && !SelectionCallbackHandler::isRunning() && !viewer->isSelecting()
+        && viewer->isSelectionEnabled();
+}
+
+bool StdBoxSelection::isActive()
+{
+    return canStartGeometricSelection();
+}
+
+void StdBoxSelection::activated(int iMsg)
+'''),
+    ('''void StdBoxElementSelection::activated(int iMsg)
+''', '''bool StdBoxElementSelection::isActive()
+{
+    return canStartGeometricSelection();
+}
+
+void StdBoxElementSelection::activated(int iMsg)
+'''),
+    ('''void StdBoxSelection::activated(int iMsg)
+{
+    Q_UNUSED(iMsg);
+    auto view = qobject_cast<View3DInventor*>(getMainWindow()->activeWindow());
+    if (view) {
+        View3DInventorViewer* viewer = view->getViewer();
+        if (!viewer->isSelecting()) {
+''', '''void StdBoxSelection::activated(int iMsg)
+{
+    Q_UNUSED(iMsg);
+    auto view = qobject_cast<View3DInventor*>(getMainWindow()->activeWindow());
+    if (view) {
+        View3DInventorViewer* viewer = view->getViewer();
+        if (canStartGeometricSelection()) {
+'''),
+    ('''void StdBoxElementSelection::activated(int iMsg)
+{
+    Q_UNUSED(iMsg);
+    auto view = qobject_cast<View3DInventor*>(getMainWindow()->activeWindow());
+    if (view) {
+        View3DInventorViewer* viewer = view->getViewer();
+        if (!viewer->isSelecting()) {
+''', '''void StdBoxElementSelection::activated(int iMsg)
+{
+    Q_UNUSED(iMsg);
+    auto view = qobject_cast<View3DInventor*>(getMainWindow()->activeWindow());
+    if (view) {
+        View3DInventorViewer* viewer = view->getViewer();
+        if (canStartGeometricSelection()) {
+'''),
+    ('''//===========================================================================
+// Std_BoxElementSelection
+//===========================================================================
+''', freehand_command + '''//===========================================================================
+// Std_BoxElementSelection
+//===========================================================================
+'''),
+    ('''    rcCmdMgr.addCommand(new StdBoxSelection());
+    rcCmdMgr.addCommand(new StdBoxElementSelection());
+''', '''    rcCmdMgr.addCommand(new StdBoxSelection());
+    rcCmdMgr.addCommand(new StdFreehandSelection());
+    rcCmdMgr.addCommand(new StdBoxElementSelection());
+'''),
+])
+
+# The diagonal bounding-box shortcut is valid only for two-point rectangles.
+# Arbitrary outlines must use the existing center/polygon test instead.
+replace_file("src/Gui/Selection/BoxSelection.cpp", [
+    (''' * @param[in] mat Accumulated transformation matrix.
+ * @param[in] transform Whether to apply object transforms while resolving geometry.
+''', ''' * @param[in] mat Accumulated transformation matrix.
+ * @param[in] rectangularSelection Whether the source polygon is a two-point rectangle.
+ * @param[in] transform Whether to apply object transforms while resolving geometry.
+'''),
+    ('''    const Base::Polygon2d& polygon,
+    const Base::Matrix4D& mat,
+    bool transform = true,
+''', '''    const Base::Polygon2d& polygon,
+    const Base::Matrix4D& mat,
+    bool rectangularSelection,
+    bool transform = true,
+'''),
+    ('''        if (polygon.Contains(Base::Vector2d(bbox.MinX, bbox.MinY))
+            && polygon.Contains(Base::Vector2d(bbox.MaxX, bbox.MaxY))) {
+''', '''        if (rectangularSelection && polygon.Contains(Base::Vector2d(bbox.MinX, bbox.MinY))
+            && polygon.Contains(Base::Vector2d(bbox.MaxX, bbox.MaxY))) {
+'''),
+    ('''        const auto& sels
+            = getBoxSelection(svp, mode, selectElement, proj, polygon, smat, false, depth + 1);
+''', '''        const auto& sels = getBoxSelection(
+            svp, mode, selectElement, proj, polygon, smat, rectangularSelection, false, depth + 1
+        );
+'''),
+    ('''        for (auto& sub : getBoxSelection(vp, selectionMode, selectElement, proj, polygon, mat)) {
+''', '''        for (auto& sub : getBoxSelection(
+                 vp, selectionMode, selectElement, proj, polygon, mat, glPolygon.size() == 2
+             )) {
 '''),
 ])
 

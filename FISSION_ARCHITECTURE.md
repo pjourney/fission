@@ -1,8 +1,8 @@
-# Fission 0.2 Alpha architecture
+# Fission 0.3 Alpha architecture
 
-Fission `0.2.0-alpha` builds the pinned FreeCAD C++ application with a small
+Fission `0.3.0-alpha` builds the pinned FreeCAD C++ application with a small
 identity/navigation patch and a shared native Qt shell for Design, Drawing,
-and Manufacture. Product labels use **Fission 0.2 Alpha**. The engine retains
+and Manufacture. Product labels use **Fission 0.3 Alpha**. The engine retains
 its upstream version for document migrations and FCStd compatibility.
 
 ## Core and presentation boundary
@@ -80,6 +80,35 @@ dependency conflicts, but drag reordering stays disabled because legality also
 depends on body topology, feature support and native sequential-model semantics.
 The UI explains the limitation and never rewrites the dependency graph.
 
+## Canvas interaction
+
+`marking_config.py` validates versioned portable settings and compass hit tests.
+`marking.py` owns a Qt popup with eight fixed sectors. Alt+RMB is scoped to the
+active native 3D viewport with Fission navigation; both press and release are
+consumed. Plain RMB remains in Coin's native context-menu path. The popup closes
+and restores canvas focus before queued dispatch through `Controller.execute`.
+Document, context, and viewport identity are checked again before invocation.
+Native QAction availability disables slots, and modal dialogs/feature tasks,
+typing focus, and live native geometric selection handlers block opening.
+Normal sketch editing and idle native Assembly editing retain their own contexts.
+
+The native `Std_FreehandSelection` command appends a selection enum without
+renumbering existing values and invokes upstream `FreehandSelection`. A shared
+handler preserves native cursor/selection state, gates, Ctrl behavior, and
+cancellation. Box and freehand commands reject overlapping handlers across views.
+A scoped Qt destruction connection releases shared ownership when an armed viewer
+closes; normal completion disconnects it without querying a disposing document.
+Concave polygons bypass the bounding-box shortcut that is valid only for rectangles.
+
+`selection.py` paints through native `getObjectInfo` ray picks, interpolating
+screen samples and respecting physical-pixel coordinates. It adds whole objects
+through native selection, retaining the parent/subpath for linked components.
+It never replaces a selection gate or changes geometry. NoResolve snapshots and
+document-scoped clearing preserve linked and cross-document selections on Escape.
+Stroke release, Escape, view/document changes, deactivation, and shutdown restore
+the cursor and release Fission's event filter ownership. Feature tasks and sketch
+editing keep their native selection workflow.
+
 ## Surface and Mesh adapters
 
 Surface tools expose native filling, boundary/section surfaces, ruled surfaces,
@@ -144,7 +173,15 @@ tests save/reopen and interchange, and exposes the actual GUI Stitch
 accept/cancel/Undo/Redo case to the serial runner. Its App-only cases can run
 under `FissionCmd.exe` with `FISSION_SPECIALIST_AUTORUN=1`.
 
-Native acceptance for the new 0.2 workspace, Stitch, cube, and navigation-strip
+The 0.3 build-tree and installed portable suites each passed 34 native GUI cases
+and separate restart checks; all 71 presentation/Qt tests and 26 native CTest
+executables passed. Canvas acceptance includes native concave selection, linked
+paint/escape paths, idle Assembly, actual Fillet tasks, actual Sketcher line clicks,
+configuration resets, stationary click guards after popup fitting, and New Design
+from Drawing. `scripts/test-gui.ps1 -CanvasOnly` runs four focused canvas groups.
+Primary installed-runtime reports are in `test-output/canvas-portable`.
+
+Earlier native acceptance for the 0.2 workspace, Stitch, cube, and navigation-strip
 controls was exercised on October 4, 2026. The targeted workspace run passed
 native TechDraw page/projection editing with SVG/PDF exports, CAM Job/Profile
 editing with generated toolpath preview, workspace keyboard cycling, and native
@@ -187,10 +224,10 @@ The independent Fission repository retains origin at pjourney/fission and an
 upstream FreeCAD remote. `source-lock.json` pins the recursive engine checkout.
 The ignored `upstream-src` has its own upstream remote and codex/fission-engine
 branch. `patches/0001-fission-identity-navigation.patch` contains reviewable engine
-adaptations across 21 source files, including document-owned TaskView contextual
+adaptations across 25 source files, including document-owned TaskView contextual
 panels and Assembly's `QPointer` solver-panel lifetime guard. Deterministic
 generation, application to fresh pinned source, normalized byte comparison,
-and reverse checking passed for all 21 adaptations. The installer
+and reverse checking passed for all 25 adaptations. The installer
 copies the original Fission executable icon separately.
 Fission UI changes remain isolated under Mod/Fission. No geometry-kernel changes
 are made and no changes are submitted upstream.

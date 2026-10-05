@@ -206,8 +206,25 @@ class ShortcutTests(unittest.TestCase):
             self.assertEqual(self.profile.shortcut(row), "")
 
     def test_unsupported_fusion_keys_are_reserved(self):
-        for key in ["1", "2", "3", "Shift+N", "Shift+J", "Shift+S", "Ctrl+Alt+A", "Ctrl+Alt+P"]:
+        for key in ["Shift+N", "Shift+J", "Shift+S", "Ctrl+Alt+A", "Ctrl+Alt+P"]:
             self.assertEqual(self.profile.resolve(key)["state"], "unsupported")
+
+    def test_geometric_selection_keys_resolve_in_supported_contexts(self):
+        expected = [("1", "Fission_WindowSelection"),
+                    ("2", "Fission_FreeformSelection"),
+                    ("3", "Fission_PaintSelection")]
+        for context in ("model", "assembly", "surface", "mesh", "cam"):
+            for key, command in expected:
+                with self.subTest(context=context, key=key):
+                    row = self.profile.resolve(key, context)
+                    self.assertEqual(row["command"], command)
+                    self.assertNotEqual(row.get("state"), "unsupported")
+
+    def test_geometric_selection_keys_leave_sketch_and_drawing_native(self):
+        for context in ("sketch", "drawing"):
+            for key in ("1", "2", "3"):
+                with self.subTest(context=context, key=key):
+                    self.assertIsNone(self.profile.resolve(key, context))
 
     def test_workspace_and_navigation_keys_are_implemented(self):
         for key, command in [("Ctrl+[", "Fission_PreviousWorkspace"), ("Ctrl+]", "Fission_NextWorkspace"),
@@ -330,15 +347,56 @@ class NativeQtShortcutTests(unittest.TestCase):
         self.assertEqual(self.editors[3].toPlainText(), "e")
 
     def test_reserved_key_cannot_trigger_unrelated_native_action(self):
-        action = self.QtGui.QAction("Stock view orientation", self.main)
-        action.setShortcut("1")
-        action.triggered.connect(lambda: self.native_calls.append("1"))
+        action = self.QtGui.QAction("Unrelated stock joint command", self.main)
+        action.setShortcut("Shift+J")
+        action.triggered.connect(lambda: self.native_calls.append("Shift+J"))
         self.main.addAction(action)
         self.application.processEvents()
-        self.press(self.QtCore.Qt.Key_1)
+        self.press(self.QtCore.Qt.Key_J, modifiers=self.QtCore.Qt.ShiftModifier)
         self.assertEqual(self.native_calls, [])
         self.assertEqual(self.called, [])
         self.assertIn("reserved", self.notifications[-1])
+
+    def test_geometric_selection_keys_dispatch_real_qt_events(self):
+        expected = [(self.QtCore.Qt.Key_1, "Fission_WindowSelection"),
+                    (self.QtCore.Qt.Key_2, "Fission_FreeformSelection"),
+                    (self.QtCore.Qt.Key_3, "Fission_PaintSelection")]
+        for context in ("model", "assembly", "surface", "mesh", "cam"):
+            self.current_context = context
+            for key, command in expected:
+                with self.subTest(context=context, key=key):
+                    before = len(self.called)
+                    self.press(key)
+                    self.assertEqual(self.called[before:], [command])
+        self.assertEqual(self.notifications, [])
+
+    def test_geometric_selection_keys_reach_native_sketch_canvas(self):
+        # A widget event filter stands in for the native sketch canvas. It
+        # receives key presses only when the application-level Fission filter
+        # leaves those events unconsumed.
+        received = []
+        QtCore = self.QtCore
+
+        class CanvasKeyObserver(QtCore.QObject):
+            def eventFilter(self, obj, event):
+                if event.type() == QtCore.QEvent.KeyPress:
+                    received.append(event.key())
+                return False
+
+        observer = CanvasKeyObserver(self.canvas)
+        self.canvas.installEventFilter(observer)
+        try:
+            for context in ("sketch", "drawing"):
+                self.current_context = context
+                for key in (QtCore.Qt.Key_1, QtCore.Qt.Key_2, QtCore.Qt.Key_3):
+                    with self.subTest(context=context, key=key):
+                        before = len(received)
+                        self.press(key)
+                        self.assertEqual(received[before:], [key])
+            self.assertEqual(self.called, [])
+            self.assertEqual(self.notifications, [])
+        finally:
+            self.canvas.removeEventFilter(observer)
 
     def test_classic_and_deactivation_restore_actions(self):
         self.manager.apply_profile(CLASSIC_PROFILE)

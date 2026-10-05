@@ -173,6 +173,10 @@ class Controller(QtCore.QObject):
         self.create_navigation()
         from .shortcuts import ShortcutManager
         self.shortcuts = ShortcutManager(self, main_window)
+        from .selection import PaintSelection
+        from .marking import MarkingMenu
+        self.paint = PaintSelection(self)
+        self.marking = MarkingMenu(self)
         self.observer = DocumentObserver(self)
         App.addDocumentObserver(self.observer)
         self.timer = QtCore.QTimer(self)
@@ -272,6 +276,8 @@ class Controller(QtCore.QObject):
 
     def deactivate(self):
         self.save_layout()
+        self.marking.close()
+        self.paint.cancel()
         self.active = False
         self.timer.stop()
         if not self._keep_shortcuts and hasattr(self.shortcuts, "deactivate"):
@@ -444,8 +450,18 @@ class Controller(QtCore.QObject):
                            ("Std_ViewFitAll", "Fit  F6"), ("Std_ViewFitSelection", "Fit Selection"),
                            ("Std_OrthographicCamera", "Orthographic"), ("Std_PerspectiveCamera", "Perspective")]:
             row.addWidget(self.make_button(cmd, title, small=True))
+        select = QtWidgets.QToolButton()
+        select.setText("Select")
+        select.setPopupMode(QtWidgets.QToolButton.InstantPopup)
+        menu = QtWidgets.QMenu(select)
+        for command, title in (("WindowSelection", "Window  1"), ("FreeformSelection", "Freeform  2"),
+                               ("PaintSelection", "Paint  3")):
+            menu.addAction(title, lambda checked=False, name=command: self.execute("Fission_" + name))
+        select.setMenu(menu)
+        row.addWidget(select)
+        row.addWidget(self.make_button("Fission_MarkingMenu", "Marking Menu", small=True))
         row.addStretch()
-        row.addWidget(QtWidgets.QLabel("MMB Pan   ·   Shift + MMB Orbit   ·   Wheel Zoom"))
+        row.addWidget(QtWidgets.QLabel("MMB Pan · Shift + MMB Orbit · Alt + RMB Menu"))
         self.nav_dock.setWidget(content)
         self.main.addDockWidget(QtCore.Qt.BottomDockWidgetArea, self.nav_dock)
         self.main.splitDockWidget(self.nav_dock, self.timeline, QtCore.Qt.Vertical)
@@ -472,6 +488,7 @@ class Controller(QtCore.QObject):
     def refresh_context(self):
         if not self.active or self._activation_pending:
             return
+        self.marking.validate()
         doc = App.ActiveDocument
         gui_doc = Gui.getDocument(doc.Name) if doc else None
         editing = bool(Gui.Control.activeDialog() or (gui_doc and gui_doc.getInEdit()))
@@ -545,6 +562,9 @@ class Controller(QtCore.QObject):
 
     def execute(self, command_id):
         try:
+            if self.paint.viewport is not None and command_id not in (
+                    "Fission_WindowSelection", "Fission_FreeformSelection", "Fission_PaintSelection"):
+                self.paint.cancel()
             cmd = Gui.Command.get(command_id)
             if not cmd:
                 self.notify("This tool is unavailable in this build: " + command_id)
@@ -598,12 +618,21 @@ class Controller(QtCore.QObject):
             self.search_dialog.show()
             self.search_dialog.raise_()
             self.search_dialog.activateWindow()
+        elif name == "MarkingMenu":
+            self.marking.open()
+        elif name in ("WindowSelection", "FreeformSelection", "PaintSelection"):
+            self.marking.close()
+            self.paint.cancel()
+            if name == "PaintSelection":
+                self.paint.start()
+            else:
+                self.execute("Std_BoxSelection" if name == "WindowSelection" else "Std_FreehandSelection")
         elif name == "Preferences":
             from .preferences import PreferencesDialog
             PreferencesDialog(self, self.main).exec()
         elif name == "About":
             QtWidgets.QMessageBox.about(self.main, "About Fission",
-                "<h2>Fission 0.2 Alpha</h2><p>Local parametric mechanical design.</p>"
+                "<h2>Fission 0.3 Alpha</h2><p>Local parametric mechanical design.</p>"
                 "<p>Fission is based on the FreeCAD open-source project.</p>"
                 "<p>FreeCAD's contributors retain their copyrights. Engine: LGPL 2.1 or later; "
                 "Fission presentation: MIT and LGPL, as identified in each source file. See the bundled NOTICE and licenses.</p>"
@@ -654,6 +683,11 @@ class Controller(QtCore.QObject):
         if self._workspace_name != "Design" and not self.switch_workspace("Design"):
             return None
         doc = App.newDocument("Design")
+        # Workspace activation restores its document after native Qt layout
+        # setup. A new design requested during that transition must become the
+        # restore target instead of the previously active document.
+        if self._activation_pending:
+            self._workspace_document = doc.Name
         doc.Label = "Untitled Design"
         component = doc.addObject("App::Part", "Component")
         component.Label = "Component 1"
@@ -869,6 +903,8 @@ class Controller(QtCore.QObject):
 
     def shutdown(self):
         self.timer.stop()
+        self.marking.shutdown()
+        self.paint.shutdown()
         self.browser.shutdown()
         self.timeline.shutdown()
         self.shortcuts.deactivate()

@@ -5,6 +5,7 @@ param(
     [switch]$SkipSmoke,
     [switch]$SkipPersistence,
     [switch]$WorkspacesOnly,
+    [switch]$CanvasOnly,
     [ValidateRange(15,180)][int]$TimeoutSeconds = 90
 )
 Set-StrictMode -Version Latest
@@ -47,8 +48,9 @@ try {
     $env:FISSION_SOURCE_ROOT = $projectRoot
     $env:FISSION_TEST_OUTPUT = $OutputDirectory
     if ($WorkspacesOnly) { Invoke-FissionMacro 'native-workspaces' 'tests\workspaces.FCMacro' 'workspace.cfg' 'workspace-complete.txt' }
-    if (-not $WorkspacesOnly -and -not $SkipSmoke) { Invoke-FissionMacro 'native-smoke' 'tests\smoke.FCMacro' 'user.cfg' 'smoke-complete.txt' }
-    if (-not $WorkspacesOnly -and -not $SkipPersistence) {
+    if ($CanvasOnly) { Invoke-FissionMacro 'native-canvas' 'tests\canvas.FCMacro' 'canvas.cfg' 'canvas-complete.txt' }
+    if (-not $WorkspacesOnly -and -not $CanvasOnly -and -not $SkipSmoke) { Invoke-FissionMacro 'native-smoke' 'tests\smoke.FCMacro' 'user.cfg' 'smoke-complete.txt' }
+    if (-not $WorkspacesOnly -and -not $CanvasOnly -and -not $SkipPersistence) {
         foreach ($phase in @('write', 'read')) {
             $env:FISSION_PERSISTENCE_PHASE = $phase
             Invoke-FissionMacro ('persistence-' + $phase) 'tests\persistence.FCMacro' 'persistence.cfg' ('persistence-' + $phase + '-complete.txt')

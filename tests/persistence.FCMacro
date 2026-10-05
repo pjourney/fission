@@ -70,6 +70,7 @@ def run_persistence_phase():
         from fission.shell import get_controller
         from fission.preferences import PreferencesDialog
         from fission.shortcuts import ShortcutProfile
+        from fission.marking_config import read_config, write_config
         controller = get_controller()
         controller.main.show()
         controller.main.activateWindow()
@@ -85,6 +86,13 @@ def run_persistence_phase():
             preferences.theme.setCurrentText("Light")
             preferences.navigation.setCurrentIndex(preferences.navigation.findData("Gui::CADNavigationStyle"))
             preferences.accept()  # Exercise the public preference commit without opening a modal dialog.
+            marking = read_config(controller.settings)
+            marking["enabled"] = False
+            marking["slots"]["model"][0] = "Fission_Fit"
+            marking["slots"]["model"][1] = ""
+            marking["slots"]["mesh"][7] = "FutureWorkbench_CustomCommand"
+            write_config(controller.settings, marking)
+            controller.marking.refresh_settings()
             controller.shortcuts.set_binding("Fission_Fillet", "Alt+F")
             view_parameters = App.ParamGet("User parameter:BaseApp/Preferences/View")
             if view_parameters.GetBool("ShowNaviCube", True):
@@ -112,6 +120,14 @@ def run_persistence_phase():
             require(written["status"] == "passed", "A successful write process must precede read")
             require(written["process_id"] != os.getpid(), "Read validation must run in a genuinely separate process")
             require(controller.settings.GetString("Theme", "") == "Light", "Light theme must survive application restart")
+            marking = read_config(controller.settings)
+            require(not marking["enabled"] and marking["slots"]["model"][:2] == ["Fission_Fit", ""],
+                    "Disabled marking menu and custom/empty slots must survive a separate process restart")
+            require(marking["slots"]["mesh"][7] == "FutureWorkbench_CustomCommand",
+                    "Unavailable command IDs must remain stored after restart")
+            require(controller.marking.config == marking, "Restarted menu must load the actual persisted configuration")
+            result["marking_restart"] = {"enabled": False, "model_north": "Fission_Fit", "model_northeast": "",
+                                         "mesh_northwest": "FutureWorkbench_CustomCommand"}
             require("#f5f7f9" in controller.main.styleSheet(), "Restored Light theme must be applied to real Qt widgets")
             require(controller.settings.GetString("Navigation", "") == "Gui::CADNavigationStyle", "Alternate navigation must survive restart")
             view_parameters = App.ParamGet("User parameter:BaseApp/Preferences/View")
