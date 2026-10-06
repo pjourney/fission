@@ -14,6 +14,9 @@ COMMANDS = {
     "FinishSketch": ("Finish Sketch", "Sketcher_LeaveSketch", "Sketcher_LeaveSketch", "close sketch", "sketch"),
     "Extrude": ("Extrude", "PartDesign_Pad", "PartDesign_Pad", "pad extrusion create", "model"),
     "Cut": ("Extrude Cut", "PartDesign_Pocket", "PartDesign_Pocket", "pocket subtract", "model"),
+    "RevolveCut": ("Revolve Cut", "PartDesign_Groove", "PartDesign_Groove", "groove subtract revolution turn", "model"),
+    "SweepCut": ("Sweep Cut", "PartDesign_SubtractivePipe", "PartDesign_SubtractivePipe", "subtractive pipe path profile", "model"),
+    "LoftCut": ("Loft Cut", "PartDesign_SubtractiveLoft", "PartDesign_SubtractiveLoft", "subtractive loft sections profiles", "model"),
     "Revolve": ("Revolve", "PartDesign_Revolution", "PartDesign_Revolution", "rotation", "model"),
     "Sweep": ("Sweep", "PartDesign_AdditivePipe", "PartDesign_AdditivePipe", "pipe path", "model"),
     "Loft": ("Loft", "PartDesign_AdditiveLoft", "PartDesign_AdditiveLoft", "profiles", "model"),
@@ -27,6 +30,8 @@ COMMANDS = {
     "CircPattern": ("Circular Pattern", "PartDesign_PolarPattern", "PartDesign_PolarPattern", "polar pattern", "model"),
     "Boolean": ("Combine", "PartDesign_Boolean", "PartDesign_Boolean", "boolean union cut intersect", "model"),
     "Plane": ("Construction Plane", "PartDesign_Plane", "PartDesign_Plane", "datum reference", "model"),
+    "Axis": ("Construction Axis", "PartDesign_Line", "PartDesign_Line", "datum line reference", "model"),
+    "Point": ("Construction Point", "PartDesign_Point", "PartDesign_Point", "datum point reference", "model"),
     "Move": ("Move / Copy", None, "Std_Transform", "translate rotate position transform duplicate linked copy", "model"),
     "Measure": ("Measure", "Std_Measure", "Std_Measure", "inspect distance angle", "all"),
     "Appearance": ("Appearance", "Std_SetAppearance", "Std_SetAppearance", "material color", "model"),
@@ -51,6 +56,7 @@ COMMANDS = {
     "Stitch": ("Stitch", None, "Surface_Filling", "sew join surfaces shell", "surface"),
     "AssemblyJoint": ("Joint", "Assembly_CreateJointFixed", "Assembly_CreateJointFixed", "constraint rigid fixed", "assembly"),
     "NewComponent": ("New Component", None, "Std_Part", "part product", "model"),
+    "NewBody": ("New Body", "PartDesign_Body", "PartDesign_Body", "empty body solid component container", "model"),
 }
 
 _initialized = False
@@ -117,6 +123,14 @@ class FissionCommand:
             return True
         if not App.ActiveDocument:
             return False
+        if self.name in ("Extrude", "Cut"):
+            doc = Gui.activeDocument()
+            edit = doc.getInEdit() if doc else None
+            if edit and edit.Object.isDerivedFrom("Sketcher::SketchObject"):
+                return True
+        if self.name in ("Extrude", "Cut", "RevolveCut", "SweepCut", "LoftCut", "Plane", "Axis", "Point", "NewBody", "NewComponent"):
+            from .modeling import available
+            return available(self.name) and (backend is None or bool(Gui.Command.get(backend) and Gui.Command.get(backend).isActive()))
         if self.name == "CreateSketch":
             document = Gui.activeDocument()
             return bool(document and not document.getInEdit()
@@ -124,8 +138,6 @@ class FissionCommand:
         if self.name == "Move":
             from .move import can_move
             return can_move()
-        if self.name == "NewComponent" and App.ActiveDocument.HasPendingTransaction:
-            return False
         if self.name == "EditFeature":
             return bool(Gui.Selection.getSelection()) and not Gui.Control.activeDialog()
         if self.name == "Stitch":
@@ -135,11 +147,6 @@ class FissionCommand:
             selected = Gui.Selection.getSelection()
             return bool(selected) and all(obj.Document is App.ActiveDocument and obj.isDerivedFrom("Part::Feature")
                                           and not obj.Shape.isNull() for obj in selected)
-        if self.name in ("Extrude", "Cut"):
-            doc = Gui.activeDocument()
-            edit = doc.getInEdit() if doc else None
-            if edit and edit.Object.isDerivedFrom("Sketcher::SketchObject"):
-                return True
         if backend:
             cmd = Gui.Command.get(backend)
             return bool(cmd and cmd.isActive())

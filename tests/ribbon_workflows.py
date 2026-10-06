@@ -120,6 +120,38 @@ def icons_and_inventory(controller, settle, output):
                 cad.require(controller.browser.filter.palette().color(QtGui.QPalette.PlaceholderText)
                             == QtGui.QColor(theme.COLORS[name]["muted"]),
                             name + " browser placeholder must use readable muted text")
+                for dock in (controller.browser, controller.timeline):
+                    title = dock.titleBarWidget() or dock
+                    cad.require(title.palette().color(QtGui.QPalette.WindowText) == expected
+                                and title.palette().color(QtGui.QPalette.Text) == expected,
+                                name + " native product dock title must be readable")
+                    controls = [button for button in title.findChildren(QtWidgets.QAbstractButton)
+                                if button.objectName().startswith("qt_dockwidget_") and button.isVisible()]
+                    cad.require(len(controls) >= 2, "Native dock must retain its Close and Float controls")
+                    glyph = QtGui.QColor("#000000" if name == "Light" else "#ffffff")
+                    for control in controls:
+                        pixels = control.grab().toImage()
+                        cad.require(any(pixels.pixelColor(x, y) == glyph for y in range(pixels.height())
+                                        for x in range(pixels.width())),
+                                    name + " rendered native dock glyph must contrast with its header")
+                    if name == "Light":
+                        floating = dock.findChild(QtWidgets.QAbstractButton, "qt_dockwidget_floatbutton")
+                        closing = dock.findChild(QtWidgets.QAbstractButton, "qt_dockwidget_closebutton")
+                        QtTest.QTest.mouseClick(floating, QtCore.Qt.LeftButton)
+                        settle(80)
+                        cad.require(dock.isFloating(), "Themed Float control must retain native docking behavior")
+                        dock.setFloating(False)
+                        settle(80)
+                        QtTest.QTest.mouseClick(closing, QtCore.Qt.LeftButton)
+                        settle(80)
+                        cad.require(not dock.isVisible(), "Themed Close control must hide its native dock")
+                        dock.show()
+                        settle(80)
+                        for control in controls:
+                            pixels = control.grab().toImage()
+                            cad.require(any(pixels.pixelColor(x, y) == glyph for y in range(pixels.height())
+                                            for x in range(pixels.width())),
+                                        "Native redocking must preserve Light dock glyph contrast")
                 for button in controller.buttons:
                     _pixels(button.icon(), 16 if button.toolButtonStyle() == QtCore.Qt.ToolButtonTextBesideIcon else 26)
                 controller.main.grab().save(str(Path(output) / ("fission-ribbon-" + name.lower() + ".png")))
@@ -127,7 +159,8 @@ def icons_and_inventory(controller, settle, output):
         finally:
             theme.apply(controller.main, old_theme)
     return {"registered_slots": len(rows), "native_variants": sum(len(items) for items in VARIANTS.values()),
-            "sizes": [16, 26], "themes": ["Dark", "Light"], "optional_absent": sorted(set(missing))}
+            "sizes": [16, 26], "themes": ["Dark", "Light"], "native_dock_controls": True,
+            "optional_absent": sorted(set(missing))}
 
 
 def primitives(controller, settle, output):

@@ -1,8 +1,8 @@
-# Fission 0.7 Alpha architecture
+# Fission 0.8 Alpha architecture
 
-Fission `0.7.0-alpha` builds the pinned FreeCAD C++ application with a small
+Fission `0.8.0-alpha` builds the pinned FreeCAD C++ application with a small
 identity/navigation patch and a shared native Qt shell for Design, Drawing,
-and Manufacture. Product labels use **Fission 0.7 Alpha**. The engine retains
+and Manufacture. Product labels use **Fission 0.8 Alpha**. The engine retains
 its upstream version for document migrations and FCStd compatibility.
 
 ## Core and presentation boundary
@@ -38,7 +38,7 @@ in `resources/icons` distinguish Fission's shell tools; valid native CAD artwork
 keeps its upstream implementation and license. This corrects 40 blank positions
 found in the native inventory without replacing working native icons.
 
-`ribbon_tools.py` records 13 split-button families and 60 registered native menu
+`ribbon_tools.py` records 16 split-button families and 69 registered native menu
 choices. Sketcher variants retain their own command IDs. Part Design's additive
 and subtractive primitives use the native group command with its audited item
 index; their eight item action names are not invented command registrations.
@@ -56,6 +56,38 @@ Theme changes explicitly refresh Browser/Timeline text palettes, retained item
 brushes, and the Browser filter placeholder. This avoids a native dark palette
 leaving document labels faint after selecting Light appearance. Native feature
 editors retain their own validation colors.
+Only the product Browser/Timeline docks and their title controls receive the
+three text palette roles. Their default native title bars keep Qt's Float/Close
+behavior, using native black/white SVG glyphs for each appearance. No overlay
+or replacement title widget is introduced.
+
+## Solid, datum, and Body adapters
+
+The Cut menu dispatches Revolve Cut, Sweep Cut, and Loft Cut to native
+`PartDesign_Groove`, `PartDesign_SubtractivePipe`, and
+`PartDesign_SubtractiveLoft`. Construction Axis/Point dispatch to native
+`PartDesign_Line`/`PartDesign_Point`; New Body dispatches to `PartDesign_Body`.
+Their native tasks, source links, recompute, serialization, and Undo remain
+authoritative. No geometry feature proxy or kernel algorithm is added.
+
+`modeling.py` shares read-only readiness and dispatch-time scope validation for
+idle Extrude, the Cut family, construction datums, New Component, and New Body.
+The explicit Finish Sketch transition for Extrude/Cut remains available.
+The active component resolves its active Body, or its sole unambiguous Body.
+Construction Plane shares these datum guards with Axis and Point.
+Cuts require a solid and selected profiles/path/sections belonging to that Body.
+Existing datum edit selections must belong to it too. Native edit/task ownership,
+pending changes, empty booked transactions, global active transactions, modal
+dialogs, disposed handles, and document/component mismatches prevent entry.
+New Body clears native selection before dispatch so selected standalone geometry
+cannot become an implicit base feature. Native creation then supplies a real
+empty Body in the active component or document root.
+
+The native `TaskDlgDatumParameters` patch calls the owning GUI document's
+`resetEdit()` after successful native OK or Cancel. Failed datum validation
+retains the edit/task; it never resets whichever other document is active.
+This completes the existing document-owned datum task lifecycle without changing
+attachment mathematics or geometry.
 
 ## Native Move / Copy
 
@@ -250,15 +282,15 @@ tests save/reopen and interchange, and exposes the actual GUI Stitch
 accept/cancel/Undo/Redo case to the serial runner. Its App-only cases can run
 under `FissionCmd.exe` with `FISSION_SPECIALIST_AUTORUN=1`.
 
-The 0.7 build-tree and installed portable suites each passed 48 native GUI cases
-and separate restart checks; all 162 presentation/Qt tests and 26 native CTest
+The 0.8 build-tree and installed portable suites each passed 53 native GUI cases
+and separate restart checks; all 190 presentation/Qt tests and 26 native CTest
 executables passed. Canvas acceptance includes native concave selection, linked
 paint/escape paths, idle Assembly, actual Fillet tasks, actual Sketcher line clicks,
 configuration resets, stationary click guards after popup fitting, and New Design
 from Drawing. `scripts/test-gui.ps1 -CanvasOnly` runs four focused canvas groups.
 Command search adds actual native Fillet tasks, Sketcher line clicks, readiness,
 focus and document-lifetime checks. `scripts/test-gui.ps1 -SearchOnly` runs three
-focused search groups. Primary installed reports are in `test-output/ribbon-portable`.
+focused search groups. Primary installed reports are in `test-output/solid-portable`.
 `scripts/test-gui.ps1 -HistoryOnly` runs four focused document-panel keyboard
 groups. They exercise real label editors and selection keys, native feature
 preview/Cancel/OK, dependency warning rejection, multi-object Delete with one Undo,
@@ -275,6 +307,17 @@ real solver geometry through canvas clicks; task and stale-edit guards pass.
 Six real Qt icon regressions also cover exact SVG resource names, wrapper backend
 pixmaps, transparent payloads, later native registration, action fallbacks, and
 the 19 original SVG glyphs at both menu and ribbon sizes.
+`test-output/solid-ribbon-final/ribbon-results.json` records the current three
+ribbon groups, including owned dock title/glyph contrast and actual Float/Close
+clicks with redocking in Dark and Light appearances.
+`scripts/test-gui.ps1 -SolidOnly` runs five native solid/datum/Body groups.
+`solid_workflows.py` invokes actual Cut menus, native angle/transition/ruled
+controls, Cancel/OK, one-step Undo/Redo, and FCStd reopen with source edits.
+`datum_workflows.py` covers actual Axis/Point attachment tasks and New Body
+creation with component/root, selection, and task/transaction ownership guards.
+The combined suite includes 28 modeling scope and ownership checks.
+Focused reports are in `test-output/solid-focused-3`; the integrated build-tree
+report is in `test-output/solid-full`.
 
 Earlier native acceptance for the 0.2 workspace, Stitch, cube, and navigation-strip
 controls was exercised on October 4, 2026. The targeted workspace run passed
@@ -319,10 +362,12 @@ The independent Fission repository retains origin at pjourney/fission and an
 upstream FreeCAD remote. `source-lock.json` pins the recursive engine checkout.
 The ignored `upstream-src` has its own upstream remote and codex/fission-engine
 branch. `patches/0001-fission-identity-navigation.patch` contains reviewable engine
-adaptations across 25 source files, including document-owned TaskView contextual
-panels and Assembly's `QPointer` solver-panel lifetime guard. Deterministic
+adaptations across 26 source files, including document-owned TaskView contextual
+panels, Assembly's `QPointer` solver-panel lifetime guard, and successful datum
+task edit completion. Deterministic
 generation, application to fresh pinned source, normalized byte comparison,
-and reverse checking passed for all 25 adaptations. The installer
+and reverse checking passed for all 26 adaptations, recorded in
+`test-output/solid-patch-validation.json`. The installer
 copies the original Fission executable icon separately.
 Fission UI changes remain isolated under Mod/Fission. No geometry-kernel changes
 are made and no changes are submitted upstream.

@@ -1245,3 +1245,49 @@ diff --git a/src/Gui/Selection/BoxSelection.cpp b/src/Gui/Selection/BoxSelection
              Gui::Selection().addSelection(doc->getName(), obj->getNameInDocument(), sub.c_str());
          }
      }
+diff --git a/src/Mod/PartDesign/Gui/TaskDatumParameters.cpp b/src/Mod/PartDesign/Gui/TaskDatumParameters.cpp
+--- a/src/Mod/PartDesign/Gui/TaskDatumParameters.cpp
++++ b/src/Mod/PartDesign/Gui/TaskDatumParameters.cpp
+@@ -31,6 +31,8 @@
+ #include <App/DocumentObject.h>
+ #include <App/Origin.h>
+ #include <App/Part.h>
++#include <Gui/Document.h>
++#include <Gui/DocumentObserver.h>
+ #include <Gui/MainWindow.h>
+ #include <Gui/ViewProvider.h>
+ #include <Gui/Selection/Selection.h>
+@@ -88,14 +90,20 @@
+ 
+ bool TaskDlgDatumParameters::reject()
+ {
+-
+-    return PartGui::TaskDlgAttacher::reject();
++    Gui::DocumentT owner(getDocumentName());
++    const bool rejected = PartGui::TaskDlgAttacher::reject();
++    if (rejected) {
++        if (Gui::Document* document = owner.getDocument()) {
++            document->resetEdit();
++        }
++    }
++    return rejected;
+ }
+ 
+ 
+ bool TaskDlgDatumParameters::accept()
+ {
+-
++    Gui::DocumentT owner(getDocumentName());
+     Part::Datum* pcDatum = ViewProvider->getObject<Part::Datum>();
+     auto pcActiveBody = PartDesignGui::getBodyFor(pcDatum, false);
+     auto pcActivePart = PartDesignGui::getPartFor(pcActiveBody, false);
+@@ -188,6 +196,9 @@
+         }
+     }
+ 
++    if (Gui::Document* document = owner.getDocument()) {
++        document->resetEdit();
++    }
+     return true;
+ }
+ 

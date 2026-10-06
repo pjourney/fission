@@ -1,6 +1,6 @@
 # Fission
 
-Fission 0.7 Alpha is native parametric mechanical CAD, built from pinned FreeCAD source with unified
+Fission 0.8 Alpha is native parametric mechanical CAD, built from pinned FreeCAD source with unified
 Design, Drawing and Manufacture workspaces, a product Browser, horizontal feature Timeline, and
 Fusion-familiar keyboard and mouse controls. Original Fission branding; the
 FreeCAD document model, constraint solver and geometry engine remain authoritative.
@@ -16,7 +16,7 @@ For this development checkout:
 ```
 
 The native application is `build/windows-release/bin/Fission.exe`. For the
-portable package in `dist/0.7.0-alpha`, extract the complete `Fission-Alpha-Windows-x64.zip` and open
+portable package in `dist/0.8.0-alpha`, extract the complete `Fission-Alpha-Windows-x64.zip` and open
 `Fission/bin/Fission.exe`. Keep its companion folders together.
 
 Choose **New**, then **Create Sketch** and a plane. Sketch tools appear in the
@@ -36,10 +36,18 @@ Ribbon tools now have complete icon rendering and arrow menus for related native
 tools. Sketch menus expose center/rounded rectangles, three-point circles, arc,
 polygon, slot and spline variants, dimensions, projection, and split tools.
 **Primitive** and **Primitive Cut** each offer eight native parametric solids.
+The **Extrude Cut** arrow also offers **Revolve Cut**, **Sweep Cut**, and
+**Loft Cut** with native preview and editable source profiles. The **Construction
+Plane** arrow offers **Axis** and **Point**, including native attachment offsets.
+Choose **New Body** from the **New Component** arrow to create an empty body in
+the active component, or at the document root when no component is active.
+Extrude, Cut choices, construction tools, and New Component/Body protect
+existing task and transaction ownership; E retains Finish Sketch into Extrude.
 Click a button to use its primary tool, or its arrow to choose a variant. Current
 readiness controls each choice; the existing keyboard shortcuts keep their
 primary tools. Dark and Light themes refresh Browser/Timeline text and filter
-placeholders. See the [Light workspace](docs/fission-ribbon-light.png).
+placeholders, with readable panel titles and native Float/Close controls in
+both appearances. See the [Light workspace](docs/fission-ribbon-light.png).
 
 **Move / Copy** previews translation in design X/Y/Z axes and rotation in
 X, then Y, then Z around each selected object's placement origin. **Cancel**
@@ -94,7 +102,8 @@ components and creating solver-backed joints.
 .\scripts\test-gui.ps1 -HistoryOnly
 .\scripts\test-gui.ps1 -MoveOnly
 .\scripts\test-gui.ps1 -RibbonOnly
-.\scripts\package.ps1 -OutputDirectory dist\0.7.0-alpha
+.\scripts\test-gui.ps1 -SolidOnly
+.\scripts\package.ps1 -OutputDirectory dist\0.8.0-alpha
 ```
 
 Builds require Visual Studio C++ Build Tools and a Windows SDK. Setup downloads
@@ -105,11 +114,12 @@ See [build instructions](FISSION_BUILD.md), [shortcut mappings](FISSION_SHORTCUT
 [architecture](FISSION_ARCHITECTURE.md), and [status and limitations](FISSION_STATUS.md).
 This development release retains native feature panels and CAD semantics.
 Several Fusion commands and optional specialist modules remain partial.
-The October 5 portable build passed 48 GUI cases, restart persistence, 13 CAD
+Press Pull (**Q**) still uses sketch Extrude; general face offset is not implemented.
+The October 6 portable build passed 53 GUI cases, restart persistence, 13 CAD
 checks, and activation of nine native workbenches. The engine passed 26 native
-test suites; Fission's profile/history/move/icons/marking/search and Qt suite passed 162 tests.
-All 127 registered ribbon positions render at menu and ribbon sizes; 13 tool
-families expose 60 native menu choices. An unavailable optional CAM Surface tool
+test suites; Fission's profile/history/modeling/move/icons/marking/search and Qt suite passed 190 tests.
+All 127 registered ribbon positions render at menu and ribbon sizes; 16 tool
+families expose 69 native menu choices. An unavailable optional CAM Surface tool
 is omitted from this build.
 
 Fission is based on the FreeCAD open-source project. Source and dependency

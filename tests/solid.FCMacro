@@ -1,0 +1,71 @@
+# SPDX-License-Identifier: LGPL-2.1-or-later
+"""Focused native subtractive modeling acceptance using an isolated profile."""
+import importlib
+import json
+import os
+from pathlib import Path
+import sys
+import traceback
+import FreeCAD as App
+import FreeCADGui as Gui
+from PySide import QtCore, QtWidgets
+try:
+    from PySide import QtTest
+except ImportError:
+    QtTest = importlib.import_module("PySide6.QtTest")
+ROOT = Path(os.environ["FISSION_SOURCE_ROOT"])
+OUTPUT = Path(os.environ["FISSION_TEST_OUTPUT"])
+sys.path.insert(0, str(ROOT / "tests"))
+
+
+def settle(milliseconds=100):
+    QtWidgets.QApplication.processEvents()
+    QtTest.QTest.qWait(milliseconds)
+    QtCore.QCoreApplication.sendPostedEvents(None, QtCore.QEvent.DeferredDelete)
+
+
+def run():
+    rows = []
+    try:
+        Gui.activateWorkbench("FissionWorkbench")
+        from fission.shell import get_controller
+        import solid_workflows
+        import datum_workflows
+        controller = get_controller()
+        controller.main.showNormal()
+        controller.main.resize(1800, 1000)
+        controller.main.activateWindow()
+        settle(300)
+        for name, function in (("Native Revolve Cut menu angle Cancel Undo Redo FCStd", solid_workflows.revolve_cut),
+                               ("Native Sweep Cut menu path transition Cancel Undo Redo FCStd", solid_workflows.sweep_cut),
+                               ("Native Loft Cut menu ruled sections Cancel Undo Redo FCStd", solid_workflows.loft_cut),
+                               ("Native construction Axis Point attachment Cancel Undo Redo FCStd", datum_workflows.construction_datums),
+                               ("Native New Body component root selection and ownership guards", datum_workflows.body_ownership)):
+            try:
+                result = function(controller, settle, OUTPUT)
+                rows.append({"name": name, "status": "passed", "details": result})
+            except Exception as error:
+                rows.append({"name": name, "status": "failed", "error": str(error), "traceback": traceback.format_exc()})
+                App.Console.PrintError(rows[-1]["traceback"] + "\n")
+    except Exception as error:
+        rows.append({"name": "Solid runner", "status": "failed", "error": str(error), "traceback": traceback.format_exc()})
+        App.Console.PrintError(rows[-1]["traceback"] + "\n")
+    finally:
+        report = {"passed": sum(row["status"] == "passed" for row in rows),
+                  "failed": sum(row["status"] == "failed" for row in rows), "cases": rows,
+                  "executable_root": App.getHomePath(), "process_id": os.getpid()}
+        (OUTPUT / "solid-results.json").write_text(json.dumps(report, indent=2, default=str) + "\n", encoding="utf-8")
+        (OUTPUT / "solid-complete.txt").write_text("PASS\n" if rows and not report["failed"] else "FAIL\n", encoding="utf-8")
+        dialog = getattr(controller, "move_dialog", None) if "controller" in locals() else None
+        if dialog and dialog.isVisible():
+            dialog.reject()
+        for name in list(App.listDocuments()):
+            gui_doc = Gui.getDocument(name)
+            if gui_doc.getInEdit():
+                gui_doc.resetEdit()
+                Gui.Control.closeDialog()
+            App.closeDocument(name)
+        QtCore.QTimer.singleShot(180, QtWidgets.QApplication.instance().quit)
+
+
+QtCore.QTimer.singleShot(1800, run)

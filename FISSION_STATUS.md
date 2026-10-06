@@ -1,8 +1,12 @@
-# Fission 0.7 Alpha
+# Fission 0.8 Alpha
 
-Fission `0.7.0-alpha` repairs missing ribbon icons, adds native Sketcher and
-parametric primitive menus, and fixes Dark/Light text contrast in the Browser
-and Timeline.
+Fission `0.8.0-alpha` adds native Revolve Cut, Sweep Cut, Loft Cut, construction
+Axis and Point, and component-scoped New Body. Their menus preserve existing
+primary tools and protect native task, edit, and transaction ownership. Native
+datum OK/Cancel now ends edit mode in the owning document after successful
+completion; invalid input retains its task for correction.
+The ribbon retains repaired icons, Sketcher and primitive menus, and readable
+Dark/Light document panels.
 Transactional Move / Copy retains design-axis translation, rotation, live
 preview, and native linked copies in the source component.
 Browser and Timeline retain keyboard editing, inline rename, multi-object native
@@ -15,7 +19,7 @@ geometry, native feature tasks, Undo, and file formats remain authoritative.
 
 ## Current validation
 
-Status date: October 5, 2026. Windows 11 x64, MSVC 14.50.35717, Qt/PySide 6.11.1,
+Status date: October 6, 2026. Windows 11 x64, MSVC 14.50.35717, Qt/PySide 6.11.1,
 Python 3.14.7, OpenCASCADE 8.0.1. FreeCAD pin:
 `c1c0b506213e072d6f1498739abb1c3890159426`.
 
@@ -23,14 +27,14 @@ Python 3.14.7, OpenCASCADE 8.0.1. FreeCAD pin:
 | --- | --- |
 | Native source compilation | Passed |
 | Native CTest executables | 26/26 passed |
-| Fission profiles/history/move/icons/panels/marking/search and real Qt tests | 162/162 passed |
-| Build-tree integrated native GUI suite | 48/48 passed |
-| Installed portable integrated native GUI suite | 48/48 passed |
-| Registered ribbon positions and native menu choices | 127 visible icons; 13 families / 60 choices |
+| Fission profiles/history/modeling/move/icons/panels/marking/search and real Qt tests | 190/190 passed |
+| Build-tree integrated native GUI suite | 53/53 passed |
+| Installed portable integrated native GUI suite | 53/53 passed |
+| Registered ribbon positions and native menu choices | 127 visible icons; 16 families / 69 choices |
 | Portable settings writer/reader in separate processes | Both passed |
 | Installed command-line CAD workflows | 13/13 passed |
 | Installed native workbenches and module/resource paths | All nine passed |
-| Native patch generation and fresh pinned application | All 25 adaptations passed in 0.3; engine patch unchanged |
+| Native patch generation and fresh pinned application | All 26 adaptations passed, including datum edit completion |
 
 The installed GUI repeats the build-tree workflows with its own profile,
 embedded Python, native modules, and resources. Actual Qt events invoke native
@@ -49,7 +53,7 @@ native fallback, measure, and recompute. Valid native CAD artwork is preserved.
 All 127 registered ribbon positions paint at 16 and 26 pixels in Dark and Light
 themes. The sole unregistered optional backend, CAM_Surface, is omitted.
 
-Arrow menus expose 13 tool families with 60 registered native choices. Sketcher
+Arrow menus expose 16 tool families with 69 registered native choices. Sketcher
 offers center/rounded rectangles, three-point circles and ellipses, arc variants,
 polygons, straight/arc slots, control/fit-point splines, split/extend, projection,
 intersection, sketch copying, and dimensional constraints. Primitive and
@@ -68,8 +72,39 @@ establish completed acceptance for every specialist tool.
 
 Switching Dark/Light appearance refreshes retained Browser item brushes,
 Timeline text palettes, and the Browser filter placeholder. Native checks cover
-both appearances. The [Light ribbon screenshot](docs/fission-ribbon-light.png)
+both appearances. Browser/Timeline dock titles and their native Float/Close
+controls use matching text colors and native black/white SVG glyphs. Actual
+Float/Close clicks and redocking retain readable controls. These scoped changes
+apply to Fission's product docks. The [Light ribbon screenshot](docs/fission-ribbon-light.png)
 shows the revised workspace and primitive tools.
+
+## Solid cuts, construction datums, and Body acceptance
+
+The Extrude Cut arrow adds Revolve Cut, Sweep Cut, and Loft Cut. These create
+native `PartDesign::Groove`, `PartDesign::SubtractivePipe`, and
+`PartDesign::SubtractiveLoft` features with their existing tasks and editable
+profile, axis, path, and section links. Actual menu clicks exercise angle,
+transition, and ruled controls; analytic volumes verify real material removal.
+Cancel rolls back the preview; OK commits one Undo operation. Undo/Redo and
+FCStd reopen preserve geometry, and source sketch dimension edits recompute
+each reopened feature.
+
+The Construction Plane arrow adds native Axis and Point. Their attachment
+offset controls, task Cancel/OK, Undo/Redo, edit completion, and FCStd reopen
+are tested. A native task repair resets edit mode only in its owning document
+after successful OK/Cancel, retaining invalid tasks for correction.
+
+New Body creates a real empty `PartDesign::Body` in the active component or
+document root. It clears a selected standalone shape before native invocation
+so native Body creation cannot silently import that shape as a base feature.
+Cut and datum tools, including Construction Plane, resolve the active component's
+unambiguous Body. Existing edits, tasks, modal dialogs, pending or booked
+transactions, stale handles,
+and mismatched document/component selections block competing operations.
+These six added commands also expose readiness in S search. The focused solid
+runner contains five groups, including component/root and ownership guards.
+Idle Extrude, the full Cut and construction families, and New Component/Body
+share these guards. Extrude/Cut retain their explicit Finish Sketch transition.
 
 ## Move / Copy acceptance
 
@@ -130,7 +165,7 @@ establishes a real Body in the active empty component before the native plane ta
 ## Command toolbox acceptance
 
 S opens the native toolbox from Browser or canvas. Every registered command is
-searchable; the focused run displays all 599 entries. Names and aliases are
+searchable. Names and aliases are
 case/whitespace tolerant, and native IDs support literal and word searches.
 Matching relevance precedes workspace ties. Empty searches prioritize the
 current context and recent successful launches. Ready/Unavailable states and
@@ -213,12 +248,17 @@ partial.
 
 Primary local evidence:
 
-- `test-output/ribbon-portable/smoke-results.json` and `persistence-report.json`:
-  all 48 installed GUI cases and separate restart processes, with native models,
+- `test-output/solid-portable/smoke-results.json` and `persistence-report.json`:
+  all 53 installed GUI cases and separate restart processes, with native models,
   exports, screenshots, logs, and completion markers.
-- `test-output/ribbon-full/smoke-results.json`: passing 48-case build-tree run.
+- `test-output/solid-full/smoke-results.json`: passing 53-case build-tree run.
+- `test-output/solid-focused-3/solid-results.json`: five native cut, datum,
+  Body, component-scope, and task/transaction ownership groups.
+- `test-output/solid-ribbon-final/ribbon-results.json`: three current ribbon
+  groups, including Dark/Light dock-title and glyph contrast, native Float/Close
+  clicks, and redocking.
 - `test-output/ribbon-focused-5/ribbon-results.json`: three native icon/menu,
-  primitive task, and Sketcher variant groups; 127 rendered positions, 60 native
+  primitive task, and Sketcher variant groups from 0.7; 127 rendered positions, 60 native
   choices, Dark/Light colors, and document/edit-owner dispatch guards.
 - `test-output/move-focused-4/move-results.json`: four native Move / Copy groups,
   including actual transformed link vertices in both native placement modes.
@@ -227,31 +267,35 @@ Primary local evidence:
 - `test-output/history-focused-4/history-results.json`: four focused native panel
   groups covering keyboard selection, inline labels, feature tasks, dependency
   prompts, multi-object Delete/Undo, keypad Enter, and component-aware Create Sketch.
-- `build/ribbon-combined-tests.log`: 162 presentation/unit/real Qt checks,
-  including native resource resolution and all 19 original SVG assets.
+- `build/solid-combined-tests.log`: 190 presentation/unit/real Qt checks,
+  including 28 modeling scope/ownership checks, native resources, and the 19 original SVGs.
 - `test-output/canvas-4/canvas-results.json`: four focused canvas groups, including
   native sketch clicks and unchanged preference/geometry state.
-- `test-output/assembly-patch-validation.json`: deterministic generation,
+- `test-output/solid-patch-validation.json`: deterministic generation,
   fresh-baseline application, normalized source equality, and reverse checking
-  for all 25 adaptations.
-- `dist/0.7.0-alpha/staging/<stage>/verification`: installed native
+  for all 26 adaptations.
+- `dist/0.8.0-alpha/staging/<stage>/verification`: installed native
   GUI/module/workbench checks and 13 command-line CAD cases.
 
-Extract `dist/0.7.0-alpha/Fission-Alpha-Windows-x64.zip` and open
+Extract `dist/0.8.0-alpha/Fission-Alpha-Windows-x64.zip` and open
 `Fission/bin/Fission.exe`. The companion `Fission-Alpha-source.zip` contains the
 matching applied engine/submodule and Fission source. `package-manifest.json`,
 `stage-manifest.json`, and `SOURCE_SHA256.json` record archive/native/source hashes.
 Native binaries under `bin`, `Mod`, and installed `lib` aliases are refreshed and
 verified. Final packaging repeats command-line CAD checks and tests both ZIPs.
 The runtime includes the editable machined-plate example and dependency licenses,
-notices, and SBOM. Earlier 0.1 through 0.6 artifacts are preserved. Tested
+notices, and SBOM. Earlier 0.1 through 0.7 artifacts are preserved. Tested
 milestones publish to the Fission origin repository's main branch after native
-acceptance and package verification. The prior 0.6 milestone is published at
-`dafb478d59c058cbe4573f26ae7607cc430533ae`; the 0.7 release follows the same
+acceptance and package verification. The prior 0.7 milestone is published at
+`286bd953e2875a31d318531548187b0e3d2e4564`; the 0.8 release follows the same
 acceptance and remote-SHA verification gate. No changes are submitted to the
 FreeCAD upstream remote.
 
 ## Prior evidence and remaining scope
+
+The October 5, 0.7 release passed 162 unit/Qt tests, 48 GUI cases in both build
+and portable applications, and separate settings restart checks. Its ribbon
+inventory covered 13 families and 60 native menu choices.
 
 The October 3, 0.1 run passed 903 selected core Python tests with one skip.
 The complete upstream Python suite is not claimed as passing: the untouched

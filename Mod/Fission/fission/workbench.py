@@ -21,6 +21,10 @@ class FissionWorkbench(Gui.Workbench):
         # activation. The menu creates it and retains stock indexed task tools.
         self.appendMenu(["&Design", "Primitives"], ["PartDesign_CompPrimitiveAdditive",
                                                    "PartDesign_CompPrimitiveSubtractive"])
+        self.appendMenu(["&Design", "Cut Features"], ["Fission_Cut", "Fission_RevolveCut",
+                                                     "Fission_SweepCut", "Fission_LoftCut"])
+        self.appendMenu(["&Design", "Construction"], ["Fission_Plane", "Fission_Axis", "Fission_Point"])
+        self.appendMenu(["&Design", "Containers"], ["Fission_NewComponent", "Fission_NewBody"])
 
     def Activated(self):
         from .shell import get_controller

@@ -12,6 +12,21 @@ command toolbox use the same inventory without creating native actions.
 # IDs are registered by the pinned engine's Sketcher/Gui/CommandCreateGeo.cpp
 # and CommandConstraints.cpp. Primary tools remain explicit menu choices.
 VARIANTS = {
+    "Fission_Cut": (
+        ("Fission_Cut", "Extrude Cut", None),
+        ("Fission_RevolveCut", "Revolve Cut", None),
+        ("Fission_SweepCut", "Sweep Cut", None),
+        ("Fission_LoftCut", "Loft Cut", None),
+    ),
+    "Fission_Plane": (
+        ("Fission_Plane", "Construction Plane", None),
+        ("Fission_Axis", "Construction Axis", None),
+        ("Fission_Point", "Construction Point", None),
+    ),
+    "Fission_NewComponent": (
+        ("Fission_NewComponent", "New Component", None),
+        ("Fission_NewBody", "New Body", None),
+    ),
     "Sketcher_CreatePolyline": (
         ("Sketcher_CreatePolyline", "Polyline", None),
         ("Sketcher_CreateLine", "Line", None),

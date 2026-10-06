@@ -1,4 +1,4 @@
-# Fission 0.7 Alpha keyboard shortcuts
+# Fission 0.8 Alpha keyboard shortcuts
 
 Fission / Fusion is the default profile. These defaults come from Autodesk's public [Fusion keyboard reference](https://help.autodesk.com/cloudhelp/ENU/Fusion-GetStarted/files/GUID-F0491540-0324-470A-B651-2238D0EFAC30.htm), checked on October 3, 2026. They describe behavior; Fission includes no Autodesk icons, artwork, or application assets.
 
@@ -81,6 +81,30 @@ before invocation; changed document, viewer, workbench, or sketch edit ownership
 cancels a stale choice. Native command icons appear in the ribbon, search, and
 marking menu even before their workbench creates stock QActions.
 
+The **Extrude Cut** arrow adds Revolve Cut, Sweep Cut, and Loft Cut. The
+**Construction Plane** arrow adds Axis and Point, and **New Component** adds
+New Body. These have no new factory keys; assign custom bindings in Keyboard
+Shortcuts or invoke them through S search. Primary button clicks and existing
+keys retain their current tools. There are 16 arrow-menu families with 69 choices.
+
+| Tool | Fission command | Native command |
+| --- | --- | --- |
+| Revolve Cut | Fission_RevolveCut | PartDesign_Groove |
+| Sweep Cut | Fission_SweepCut | PartDesign_SubtractivePipe |
+| Loft Cut | Fission_LoftCut | PartDesign_SubtractiveLoft |
+| Construction Axis | Fission_Axis | PartDesign_Line |
+| Construction Point | Fission_Point | PartDesign_Point |
+| New Body | Fission_NewBody | PartDesign_Body |
+
+Cuts use the active component's solid Body and retain native profile/path/section
+links. Construction Plane, Axis, and Point use native attachment tasks. New Body
+creates an empty Body in the active component or document root, clearing selected
+standalone shapes before native creation. Existing tasks, edits, pending/booked
+transactions, and mismatched component/document selections block these tools.
+Idle Extrude, Cut choices, construction tools, and New Component/Body share
+these guards; E/Q retain the explicit Finish Sketch transition into Extrude.
+Finish the current sketch before using the added cut or datum choices.
+
 ## Marking menu
 
 Alt + right-click opens Fission's original compass menu on a native 3D canvas
@@ -155,12 +179,30 @@ unavailable until their native actions or supported Fission context are active.
 
 ## Source verification and tests
 
-Command IDs were checked against `upstream-src/src/Mod/Sketcher/Gui/CommandCreateGeo.cpp`, `CommandSketcherTools.cpp`, `CommandAlterGeometry.cpp`, `CommandConstraints.cpp`, and TechDraw `Command*.cpp`. Current source names are `Sketcher_Projection` and `Sketcher_Dimension`, rather than guessed legacy names. `upstream-src/src/Gui/CommandPyImp.cpp` exposes native actions; `Action.cpp` and `ShortcutManager.cpp` establish QAction acceleration behavior.
+Command IDs were checked against `upstream-src/src/Mod/Sketcher/Gui/CommandCreateGeo.cpp`, `CommandSketcherTools.cpp`, `CommandAlterGeometry.cpp`, `CommandConstraints.cpp`, PartDesign `Command.cpp`/`CommandBody.cpp`, and TechDraw `Command*.cpp`. Current source names are `Sketcher_Projection` and `Sketcher_Dimension`, rather than guessed legacy names. `upstream-src/src/Gui/CommandPyImp.cpp` exposes native actions; `Action.cpp` and `ShortcutManager.cpp` establish QAction acceleration behavior.
 
 Run `python -m unittest discover -s tests -p test_shortcuts.py -v` for deterministic factory mapping, context reuse, typing-state resolver, collision detection, Classic bypass, save/load, reset, JSON atomicity, custom catalog bindings, and toolbox search tests. Qt focus and modeling invocation require the packaged GUI smoke tests; a pure resolver test alone is not evidence that every native command completed its operation.
 
 For real Qt event tests, set `FISSION_QT_TESTS=1` and `QT_QPA_PLATFORM=offscreen`, then run the same command with the LibPack Python runtime. These cover three-preset selection and persistence, legacy profile migration, dispatch through real Qt key events, stock-action collision/restoration, lazy action registration, typing in native editors, reserved-key handling, preferences rendering, and keyboard command search. The execution spy verifies dispatched IDs; geometry completion requires native CAD workflow tests.
 
-Run `scripts/test-gui.ps1 -TimeoutSeconds 300` against the built or staged application for modeling and restart persistence. Use `-RibbonOnly` for three native icon/menu/primitive/Sketcher groups, `-MoveOnly` for four native placement/copy/ownership groups, `-HistoryOnly` for four document-panel keyboard groups, `-SearchOnly` for three native toolbox groups, or `-WorkspacesOnly` for Drawing/CAM controls. The full runner also exercises the actual Stitch dialog with whole-object and face selections, tolerance editing, Cancel/OK, Undo/Redo, and FCStd save/reopen.
+Run `scripts/test-gui.ps1 -TimeoutSeconds 300` against the built or staged
+application for modeling and restart persistence. Use `-SolidOnly` for five
+native cut/datum/Body groups, `-RibbonOnly` for three icon/menu/primitive/Sketcher
+groups, `-MoveOnly` for four placement/copy/ownership groups, `-HistoryOnly` for
+four document-panel keyboard groups, `-SearchOnly` for three toolbox groups,
+or `-WorkspacesOnly` for Drawing/CAM controls. The full runner also exercises
+the actual Stitch dialog with tolerance editing, Cancel/OK, Undo/Redo, and FCStd
+save/reopen.
 
-On October 5, 2026, the integrated native GUI suite passed all 48 cases, including native ribbon primitive tasks, center-rectangle/three-point-circle canvas input, search-launched Fillet transactions, Drawing/CAM operations, Assembly, Stitch, selection and marking menus. Separate processes verified persisted search history and settings. The combined unit/Qt suite passed 162 tests. All 127 registered ribbon positions render at 16/26 pixels in Dark and Light themes. This is selected-tool acceptance; broader catalog commands and custom shortcuts still need native operation coverage. Check FISSION_STATUS.md and the generated JSON reports in `test-output/ribbon-full` and `test-output/ribbon-portable` for the tested build.
+On October 6, 2026, the integrated native GUI suite passed all 53 cases in both
+build and portable applications. Added cut tasks, datum offsets, component-scoped
+New Body, and ownership guards join the existing modeling and specialist cases.
+Separate processes verified persisted search history and settings. The combined
+unit/Qt suite passed 190 tests. All 127 registered ribbon positions render at
+16/26 pixels in Dark and Light themes. Product dock titles and native Float/Close
+controls retain readable contrast after actual clicks and redocking; focused
+evidence is in `test-output/solid-ribbon-final/ribbon-results.json`.
+This is selected-tool acceptance;
+broader catalog commands and custom shortcuts still need native operation
+coverage. Check FISSION_STATUS.md and the JSON reports in `test-output/solid-full`
+and `test-output/solid-portable` for the tested build.

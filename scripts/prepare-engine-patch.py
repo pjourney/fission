@@ -655,6 +655,47 @@ replace_file("src/Gui/Selection/BoxSelection.cpp", [
 '''),
 ])
 
+# Datum tasks use Body/subelement edit ownership. Aborting a newly created
+# datum can delete its view provider while leaving its parent Body in edit.
+# Resolve the owning document before abort, and finish editing only after the
+# native attachment task has successfully committed or canceled.
+replace_file("src/Mod/PartDesign/Gui/TaskDatumParameters.cpp", [
+    ('#include <Gui/MainWindow.h>',
+     '#include <Gui/Document.h>\n#include <Gui/DocumentObserver.h>\n#include <Gui/MainWindow.h>'),
+    ('''bool TaskDlgDatumParameters::reject()
+{
+
+    return PartGui::TaskDlgAttacher::reject();
+}''', '''bool TaskDlgDatumParameters::reject()
+{
+    Gui::DocumentT owner(getDocumentName());
+    const bool rejected = PartGui::TaskDlgAttacher::reject();
+    if (rejected) {
+        if (Gui::Document* document = owner.getDocument()) {
+            document->resetEdit();
+        }
+    }
+    return rejected;
+}'''),
+    ('''bool TaskDlgDatumParameters::accept()
+{
+
+    Part::Datum* pcDatum''', '''bool TaskDlgDatumParameters::accept()
+{
+    Gui::DocumentT owner(getDocumentName());
+    Part::Datum* pcDatum'''),
+    ('''    return true;
+}
+
+#include "moc_TaskDatumParameters.cpp"''', '''    if (Gui::Document* document = owner.getDocument()) {
+        document->resetEdit();
+    }
+    return true;
+}
+
+#include "moc_TaskDatumParameters.cpp"'''),
+])
+
 patch = []
 for filename, (before, after) in changes.items():
     patch.append("diff --git a/%s b/%s\n" % (filename, filename))

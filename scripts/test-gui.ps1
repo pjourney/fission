@@ -10,6 +10,7 @@ param(
     [switch]$HistoryOnly,
     [switch]$MoveOnly,
     [switch]$RibbonOnly,
+    [switch]$SolidOnly,
     [ValidateRange(15,300)][int]$TimeoutSeconds = 180
 )
 Set-StrictMode -Version Latest
@@ -56,9 +57,10 @@ try {
     if ($SearchOnly) { Invoke-FissionMacro 'native-search' 'tests\search.FCMacro' 'search.cfg' 'search-complete.txt' }
     if ($HistoryOnly) { Invoke-FissionMacro 'native-history' 'tests\history.FCMacro' 'history.cfg' 'history-complete.txt' }
     if ($RibbonOnly) { Invoke-FissionMacro 'native-ribbon' 'tests\ribbon.FCMacro' 'ribbon.cfg' 'ribbon-complete.txt' }
+    if ($SolidOnly) { Invoke-FissionMacro 'native-solid' 'tests\solid.FCMacro' 'solid.cfg' 'solid-complete.txt' }
     if ($MoveOnly) { Invoke-FissionMacro 'native-move' 'tests\move.FCMacro' 'move.cfg' 'move-complete.txt' }
-    if (-not $WorkspacesOnly -and -not $CanvasOnly -and -not $SearchOnly -and -not $HistoryOnly -and -not $MoveOnly -and -not $RibbonOnly -and -not $SkipSmoke) { Invoke-FissionMacro 'native-smoke' 'tests\smoke.FCMacro' 'user.cfg' 'smoke-complete.txt' }
-    if (-not $WorkspacesOnly -and -not $CanvasOnly -and -not $SearchOnly -and -not $HistoryOnly -and -not $MoveOnly -and -not $RibbonOnly -and -not $SkipPersistence) {
+    if (-not $WorkspacesOnly -and -not $CanvasOnly -and -not $SearchOnly -and -not $HistoryOnly -and -not $MoveOnly -and -not $RibbonOnly -and -not $SolidOnly -and -not $SkipSmoke) { Invoke-FissionMacro 'native-smoke' 'tests\smoke.FCMacro' 'user.cfg' 'smoke-complete.txt' }
+    if (-not $WorkspacesOnly -and -not $CanvasOnly -and -not $SearchOnly -and -not $HistoryOnly -and -not $MoveOnly -and -not $RibbonOnly -and -not $SolidOnly -and -not $SkipPersistence) {
         foreach ($phase in @('write', 'read')) {
             $env:FISSION_PERSISTENCE_PHASE = $phase
             Invoke-FissionMacro ('persistence-' + $phase) 'tests\persistence.FCMacro' 'persistence.cfg' ('persistence-' + $phase + '-complete.txt')

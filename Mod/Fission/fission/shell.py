@@ -665,10 +665,17 @@ class Controller(QtCore.QObject):
             return False
 
     def perform(self, name):
-        if name == "NewDesign":
+        if (name in ("RevolveCut", "SweepCut", "LoftCut", "Plane", "Axis", "Point", "NewBody")
+                or name in ("Extrude", "Cut") and self.context() != "sketch"):
+            from .modeling import prepare
+            if not prepare(name):
+                self.notify("Finish the current operation and check the active component and selection before using " + COMMANDS[name][0] + ".")
+                return False
+            return self.execute(COMMANDS[name][1])
+        elif name == "NewDesign":
             self.new_design()
         elif name == "NewComponent":
-            self.new_component()
+            return self.new_component()
         elif name == "CreateSketch":
             if self.ensure_body():
                 self.execute("PartDesign_NewSketch")
@@ -682,7 +689,7 @@ class Controller(QtCore.QObject):
             self.refresh_context()
         elif name in ("Extrude", "Cut") and self.context() == "sketch":
             self.perform("FinishSketch")
-            self.execute(COMMANDS[name][1])
+            return self.perform(name) if self.context() != "sketch" else False
         elif name == "Move":
             self.move_copy()
         elif name == "Search":
@@ -706,7 +713,7 @@ class Controller(QtCore.QObject):
             PreferencesDialog(self, self.main).exec()
         elif name == "About":
             QtWidgets.QMessageBox.about(self.main, "About Fission",
-                "<h2>Fission 0.7 Alpha</h2><p>Local parametric mechanical design.</p>"
+                "<h2>Fission 0.8 Alpha</h2><p>Local parametric mechanical design.</p>"
                 "<p>Fission is based on the FreeCAD open-source project.</p>"
                 "<p>FreeCAD's contributors retain their copyrights. Engine: LGPL 2.1 or later; "
                 "Fission presentation: MIT and LGPL, as identified in each source file. See the bundled NOTICE and licenses.</p>"
@@ -783,9 +790,10 @@ class Controller(QtCore.QObject):
 
     def new_component(self):
         doc = App.ActiveDocument or self.new_design()
-        if doc.HasPendingTransaction:
+        from .modeling import prepare
+        if not prepare("NewComponent"):
             self.notify("Finish or cancel the active feature before creating a component.")
-            return
+            return False
         doc.openTransaction("New component")
         component = doc.addObject("App::Part", "Component")
         component.Label = "Component %d" % len([o for o in doc.Objects if o.TypeId == "App::Part"])
@@ -798,6 +806,7 @@ class Controller(QtCore.QObject):
         view.setActiveObject("pdbody", body)
         Gui.Selection.clearSelection()
         Gui.Selection.addSelection(component)
+        return component
 
     def ensure_body(self):
         if not App.ActiveDocument:

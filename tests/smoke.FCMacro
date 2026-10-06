@@ -591,6 +591,18 @@ def run_fission_smoke():
                     lambda: ribbon_workflows.primitives(controller, settle, report.output))
         report.case("Native sketch dropdown center rectangle circle clicks and stale edit-owner guard",
                     lambda: ribbon_workflows.sketch_variants(controller, settle, report.output))
+        import solid_workflows
+        import datum_workflows
+        report.case("Native Revolve Cut angle preview Cancel Undo Redo and parametric reopen",
+                    lambda: solid_workflows.revolve_cut(controller, settle, report.output))
+        report.case("Native Sweep Cut profile spine preview Cancel Undo Redo and parametric reopen",
+                    lambda: solid_workflows.sweep_cut(controller, settle, report.output))
+        report.case("Native Loft Cut sections ruled preview Cancel Undo Redo and parametric reopen",
+                    lambda: solid_workflows.loft_cut(controller, settle, report.output))
+        report.case("Native construction Axis Point attachment Cancel Undo Redo and parametric reopen",
+                    lambda: datum_workflows.construction_datums(controller, settle, report.output))
+        report.case("Native New Body component root selection and ownership guards",
+                    lambda: datum_workflows.body_ownership(controller, settle, report.output))
         App.setActiveDocument(doc.Name)
         controller.refresh_context()
         settle()

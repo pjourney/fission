@@ -20,7 +20,7 @@ its command-line companion is `FissionCmd.exe`.
 checkout is stored in `upstream-src`. Applying Fission creates branch
 `codex/fission-engine` and retains the FreeCAD remote as `upstream`. Engine
 version 27.1 and its document compatibility rules are preserved; the Fission
-presentation has its own 0.7 Alpha label.
+presentation has its own 0.8 Alpha label.
 
 Requirements are Windows x64, Git, PowerShell, curl, a Windows SDK, and Visual
 Studio C++ Build Tools with CMake and Ninja. Allow at least 25 GB of free space
@@ -70,10 +70,11 @@ and compilation logs are in `build/windows-release/configure.log` and `build.log
 Downloaded dependencies, engine checkout, build outputs, and packages are ignored
 by the Fission root repository.
 
-`patches/0001-fission-identity-navigation.patch` contains 25 native source
+`patches/0001-fission-identity-navigation.patch` contains 26 native source
 adaptations for executable identity, resources, navigation, dock startup
 migration, document task ownership, Assembly shell retention and Python wrapper
-registration, safe GUI observer construction, and contextual task-panel lifetime.
+registration, safe GUI observer construction, contextual task-panel lifetime,
+and successful datum-task edit completion in the owning document.
 TaskView preserves document-owned solver panels when operation dialogs close,
 and Assembly uses a Qt `QPointer` for its solver panel. These changes keep native
 task and solver behavior inside the shared shell. `patches/0002-upstream-test-gil.patch`
@@ -83,9 +84,9 @@ idempotent and leaves the original source notices intact.
 
 Pinned Part Design source files use CRLF. Patch application uses
 `--ignore-space-change` to match context while retaining that source format.
-All 25 current source adaptations passed deterministic generation, fresh pinned
+All 26 current source adaptations passed deterministic generation, fresh pinned
 baseline application, normalized byte comparison with the live engine, and
-reverse checking. Evidence is in `test-output/assembly-patch-validation.json`.
+reverse checking. Evidence is in `test-output/solid-patch-validation.json`.
 Repeat this validation when changing the patch; failed hunks are not ignored.
 
 ## Validation
@@ -112,6 +113,9 @@ Repeat this validation when changing the patch; failed hunks are not ignored.
 
 # Target native icon inventory, primitive tasks and sketch arrow-menu variants.
 .\scripts\test-gui.ps1 -RibbonOnly -OutputDirectory test-output\ribbon-focused
+
+# Target Revolve/Sweep/Loft cuts, construction datums, Body scope, and ownership.
+.\scripts\test-gui.ps1 -SolidOnly -OutputDirectory test-output\solid-focused
 
 # Full upstream Python app suite, for a separate extended run.
 .\scripts\test-upstream.ps1 -SkipCpp -PythonSuite 0
@@ -150,13 +154,13 @@ uses explicit user configuration files, checks completion markers and exit
 codes, and restores its temporary environment. Integrated JSON reports, native
 logs, FCStd/STEP/STL files, and screenshots are saved in `test-output`.
 
-On October 5, 2026, the branded engine passed all 26 CTest executables. Both the
-build-tree run and the final installed portable run passed 48/48 native GUI
+On October 6, 2026, the branded engine passed all 26 CTest executables. Both the
+build-tree run and the final installed portable run passed 53/53 native GUI
 cases, followed by passing persistence writer and reader processes. Primary
-delivery evidence is in `test-output/ribbon-portable/smoke-results.json` and
-`test-output/ribbon-portable/persistence-report.json`; the build-tree
-results are in `test-output/ribbon-full`. The combined unit/Qt suite passed
-162 checks; `build/ribbon-combined-tests.log` records that run. Search coverage
+delivery evidence is in `test-output/solid-portable/smoke-results.json` and
+`test-output/solid-portable/persistence-report.json`; the build-tree
+results are in `test-output/solid-full`. The combined unit/Qt suite passed
+190 checks; `build/solid-combined-tests.log` records that run. Search coverage
 includes actual native Fillet preview/Cancel/OK/Undo, Sketcher line clicks,
 selection readiness, closing documents, complete catalog and persisted recents.
 The integrated cases cover native feature preview/OK/Cancel/Undo, active component
@@ -168,11 +172,21 @@ Cancel/no-op/one Undo, actual M/Ctrl+Z/Ctrl+Y, mesh placement, both native link
 modes and link-of-link vertices, source updates/FCStd reopen, selection dependency
 guards, and foreign/closed-document transaction ownership.
 Ribbon acceptance covers all 127 registered positions at 16/26 pixels in both
-themes, 60 native choices across 13 arrow-menu families, actual center-rectangle
+themes, 69 native choices across 16 arrow-menu families, actual center-rectangle
 and three-point-circle canvas clicks, and native Box/subtractive Cylinder task
 preview, Cancel, OK, Undo/Redo, and parametric FCStd reopen. It also checks
 context ownership after menu release and Dark/Light document-panel colors.
-`test-output/ribbon-focused-5/ribbon-results.json` records three focused groups.
+Browser/Timeline titles and native Float/Close glyphs are checked for contrast;
+actual Float/Close clicks and redocking verify the native controls still work.
+`test-output/solid-ribbon-final/ribbon-results.json` records the current three
+ribbon groups. Appearance changes are scoped to Fission's product docks.
+The prior `test-output/ribbon-focused-5/ribbon-results.json` records three
+0.7 ribbon groups. The 0.8 focused solid run in
+`test-output/solid-focused-3/solid-results.json` records five groups for real
+Revolve/Sweep/Loft cuts, Axis/Point attachment tasks, New Body scope, and
+competing task/booked-transaction guards. Cuts retain native sources after
+Cancel/OK, one-step Undo/Redo, and parametric FCStd reopen. Successful datum
+completion resets its owning document's edit mode; failed validation retains it.
 The portable Assembly case records real before-change observer calls using
 the native derived view-provider binding, restores an inactive insertion task's
 solver panel, and survives native Cancel. Installed-runtime checks also passed
@@ -190,40 +204,40 @@ to presentation.
 
 ## Portable package and matching source
 
-The verified 0.7 runtime stage is identified by `runtimeDirectory` in
-`dist/0.7.0-alpha/package-manifest.json`. It passed native GUI/restart and
+The verified 0.8 runtime stage is identified by `runtimeDirectory` in
+`dist/0.8.0-alpha/package-manifest.json`. It passed native GUI/restart and
 installed-runtime checks, 13 geometry cases, and nine workbench activations.
 `verification/portable-gui-report.json`, `verification/cad/report.json`,
 `stage-manifest.json`, and `source-verification.json` retain installed-path,
 geometry, native-byte, and applied-source evidence. The package manifests record
 verified native paths, `lib` aliases, and matching engine/Fission source hashes.
-The earlier 0.1 through 0.6 deliveries are preserved outside
-`dist/0.7.0-alpha`.
+The earlier 0.1 through 0.7 deliveries are preserved outside
+`dist/0.8.0-alpha`.
 
 Use the following procedure to stage, verify, and generate the final archives:
 
 ```powershell
 # Stage native runtime, notices, and the matching applied source first.
-.\scripts\package.ps1 -StageOnly -OutputDirectory dist\0.7.0-alpha
+.\scripts\package.ps1 -StageOnly -OutputDirectory dist\0.8.0-alpha
 
 # Use the stage path printed above. This launches the staged native GUI too.
-.\scripts\test-portable.ps1 -RuntimeDirectory '.\dist\0.7.0-alpha\staging\<stage>\Fission'
+.\scripts\test-portable.ps1 -RuntimeDirectory '.\dist\0.8.0-alpha\staging\<stage>\Fission'
 
 # Repeat integrated GUI and independent settings restart checks in the stage.
-.\scripts\test-gui.ps1 -BuildDirectory '.\dist\0.7.0-alpha\staging\<stage>\Fission' -OutputDirectory test-output\ribbon-portable -TimeoutSeconds 300
+.\scripts\test-gui.ps1 -BuildDirectory '.\dist\0.8.0-alpha\staging\<stage>\Fission' -OutputDirectory test-output\solid-portable -TimeoutSeconds 300
 
 # Refresh UI/docs/source in that stage and create the final archives.
-.\scripts\package.ps1 -OutputDirectory dist\0.7.0-alpha -ReuseStageDirectory '.\dist\0.7.0-alpha\staging\<stage>'
+.\scripts\package.ps1 -OutputDirectory dist\0.8.0-alpha -ReuseStageDirectory '.\dist\0.8.0-alpha\staging\<stage>'
 ```
 
 The script runs the configured CMake install target into a fresh directory under
 `OutputDirectory/staging`, installs Fission UI files, includes root notices and dependency
 licenses/SBOM, and produces:
 
-- `dist/0.7.0-alpha/Fission-Alpha-Windows-x64.zip`, containing the complete portable runtime.
-- `dist/0.7.0-alpha/Fission-Alpha-source.zip`, containing the exact applied Fission/FreeCAD
+- `dist/0.8.0-alpha/Fission-Alpha-Windows-x64.zip`, containing the complete portable runtime.
+- `dist/0.8.0-alpha/Fission-Alpha-source.zip`, containing the exact applied Fission/FreeCAD
   source and recursive submodule files, patches, scripts, and notices.
-- `dist/0.7.0-alpha/package-manifest.json`, recording presentation version, source pin, patch hashes, executable
+- `dist/0.8.0-alpha/package-manifest.json`, recording presentation version, source pin, patch hashes, executable
   hash, archive hashes/sizes, and staging location.
 
 LibPack's generated installer contains absolute dependency destinations. Packaging
