@@ -22,11 +22,19 @@ QMainWindow, QMenuBar, QStatusBar { background: %(bg)s; color: %(text)s; }
 QMenuBar::item:selected, QMenu::item:selected { background: %(hover)s; }
 QMenu { background: %(panel)s; color: %(text)s; border: 1px solid %(border)s; }
 QDockWidget { color: %(text)s; font: 9pt 'Segoe UI'; }
-QDockWidget::title { background: %(panel)s; padding: 5px; border-bottom: 1px solid %(border)s; }
+QDockWidget::title { background: %(panel)s; color: %(text)s; padding: 5px; border-bottom: 1px solid %(border)s; }
 QWidget#FissionRibbon, QWidget#FissionWelcome, QWidget#FissionNavigation,
 QWidget#FissionTimelineContent { background: %(panel)s; color: %(text)s; }
+QWidget#FissionRibbon QWidget { background: transparent; color: %(text)s; }
 QWidget#FissionRibbon QLabel, QWidget#FissionWelcome QLabel,
-QWidget#FissionNavigation QLabel { color: %(text)s; }
+QWidget#FissionTimelineContent QLabel, QWidget#FissionNavigation QLabel { color: %(text)s; }
+QWidget#FissionTimelineContent QToolButton { background: %(raised)s; color: %(text)s; }
+QLineEdit#FissionBrowserFilter { background: %(raised)s; color: %(text)s;
+ border: 1px solid %(border)s; padding: 4px; }
+QLabel#FissionTimelineHint { color: %(text)s; }
+QToolButton#FissionTimelineRecompute { background: %(raised)s; color: %(text)s;
+ border: 1px solid %(border)s; padding: 4px 7px; }
+QTreeWidget#FissionBrowserTree QHeaderView::section { background: %(raised)s; color: %(text)s; }
 QWidget#FissionRibbon QToolButton, QWidget#FissionNavigation QToolButton {
  color: %(text)s; background: transparent; border: 1px solid transparent; padding: 4px 7px; }
 QWidget#FissionRibbon QToolButton:hover, QWidget#FissionNavigation QToolButton:hover {
@@ -44,4 +52,24 @@ QWidget#FissionWelcome QPushButton { background: %(raised)s; color: %(text)s;
 QWidget#FissionWelcome QPushButton:hover { border-color: %(accent)s; }
 QDialog { font: 9pt 'Segoe UI'; }
 """ % c)
+    # Native application palettes can remain dark while Fission changes theme.
+    # Give product document views explicit text palettes before refreshing their
+    # per-item brushes; native task editors keep their own validation colors.
+    for widget_name in ("FissionBrowserTree", "FissionTimelineList"):
+        view = main_window.findChild(QtWidgets.QAbstractItemView, widget_name)
+        if view is not None:
+            palette = view.palette()
+            palette.setColor(QtGui.QPalette.Text, QtGui.QColor(c["text"]))
+            palette.setColor(QtGui.QPalette.Base, QtGui.QColor(c["panel"]))
+            view.setPalette(palette)
+    line_edit = main_window.findChild(QtWidgets.QLineEdit, "FissionBrowserFilter")
+    if line_edit is not None:
+        palette = line_edit.palette()
+        palette.setColor(QtGui.QPalette.PlaceholderText, QtGui.QColor(c["muted"]))
+        line_edit.setPalette(palette)
+    from .shell import existing_controller
+    controller = existing_controller()
+    if controller is not None and controller.main is main_window:
+        controller.browser.refresh()
+        controller.timeline.refresh()
     return name

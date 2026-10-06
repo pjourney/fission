@@ -584,6 +584,13 @@ def run_fission_smoke():
                     lambda: move_workflows.linked_copies(controller, settle, report.output))
         report.case("Native Move booking document and assembly ownership guards",
                     lambda: move_workflows.ownership(controller, settle, report.output))
+        import ribbon_workflows
+        report.case("Ribbon and menu icons render at both sizes in Dark and Light themes",
+                    lambda: ribbon_workflows.icons_and_inventory(controller, settle, report.output))
+        report.case("Native ribbon primitive dimensions Cancel OK Undo Redo and parametric reopen",
+                    lambda: ribbon_workflows.primitives(controller, settle, report.output))
+        report.case("Native sketch dropdown center rectangle circle clicks and stale edit-owner guard",
+                    lambda: ribbon_workflows.sketch_variants(controller, settle, report.output))
         App.setActiveDocument(doc.Name)
         controller.refresh_context()
         settle()
@@ -664,6 +671,7 @@ def run_fission_smoke():
 
         def screenshot():
             controller.main.statusBar().clearMessage()
+            controller.tabs.setCurrentIndex(0)
             controller.browser.refresh()
             controller.timeline.refresh()
             Gui.Selection.clearSelection()

@@ -390,6 +390,7 @@ class Browser(_DocumentDock):
         layout = QtWidgets.QVBoxLayout(wrapper)
         layout.setContentsMargins(8, 6, 8, 8)
         self.filter = QtWidgets.QLineEdit()
+        self.filter.setObjectName("FissionBrowserFilter")
         self.filter.setPlaceholderText("Find in design…")
         self.filter.setClearButtonEnabled(True)
         self.filter.setAccessibleName("Filter browser objects")

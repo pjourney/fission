@@ -1,0 +1,9 @@
+<!-- SPDX-License-Identifier: MIT -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+  <title>Command search</title>
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="13" cy="13" r="9" stroke="#22b7a8" stroke-width="2.8"/>
+    <path d="m20 20 8 8" stroke="#7c96a5" stroke-width="4"/>
+    <path d="M9 10h8M9 14h5" stroke="#7c96a5" stroke-width="2"/>
+  </g>
+</svg>

@@ -1,7 +1,10 @@
-# Fission 0.6 Alpha
+# Fission 0.7 Alpha
 
-Fission `0.6.0-alpha` adds transactional Move / Copy with design-axis translation,
-rotation, live preview, and native linked copies in the source component.
+Fission `0.7.0-alpha` repairs missing ribbon icons, adds native Sketcher and
+parametric primitive menus, and fixes Dark/Light text contrast in the Browser
+and Timeline.
+Transactional Move / Copy retains design-axis translation, rotation, live
+preview, and native linked copies in the source component.
 Browser and Timeline retain keyboard editing, inline rename, multi-object native
 deletion, and Create Sketch scoped to the active component. Design, Drawing,
 and Manufacture retain the shared
@@ -20,9 +23,10 @@ Python 3.14.7, OpenCASCADE 8.0.1. FreeCAD pin:
 | --- | --- |
 | Native source compilation | Passed |
 | Native CTest executables | 26/26 passed |
-| Fission profiles/history/move/panels/marking/search and real Qt tests | 156/156 passed |
-| Build-tree integrated native GUI suite | 45/45 passed |
-| Installed portable integrated native GUI suite | 45/45 passed |
+| Fission profiles/history/move/icons/panels/marking/search and real Qt tests | 162/162 passed |
+| Build-tree integrated native GUI suite | 48/48 passed |
+| Installed portable integrated native GUI suite | 48/48 passed |
+| Registered ribbon positions and native menu choices | 127 visible icons; 13 families / 60 choices |
 | Portable settings writer/reader in separate processes | Both passed |
 | Installed command-line CAD workflows | 13/13 passed |
 | Installed native workbenches and module/resource paths | All nine passed |
@@ -33,6 +37,39 @@ embedded Python, native modules, and resources. Actual Qt events invoke native
 tools and tasks. These are selected acceptance workflows rather than complete
 coverage of every exposed command. The source/runtime hashes and archive
 integrity checks are recorded in the delivery manifests.
+
+## Ribbon and native tool acceptance
+
+The native inventory identified 40 blank ribbon positions caused by resource
+names, SVG suffix handling, or commands registered before native QActions exist.
+The shared resolver now uses the backend command's actual pixmap through
+FreeCAD's icon cache. Ribbon, search, and marking menu share this resolver.
+Original MIT SVGs distinguish 16 Fission shell tools; three further glyphs cover
+native fallback, measure, and recompute. Valid native CAD artwork is preserved.
+All 127 registered ribbon positions paint at 16 and 26 pixels in Dark and Light
+themes. The sole unregistered optional backend, CAM_Surface, is omitted.
+
+Arrow menus expose 13 tool families with 60 registered native choices. Sketcher
+offers center/rounded rectangles, three-point circles and ellipses, arc variants,
+polygons, straight/arc slots, control/fit-point splines, split/extend, projection,
+intersection, sketch copying, and dimensional constraints. Primitive and
+Primitive Cut each expose Box, Cylinder, Sphere, Cone, Ellipsoid, Torus, Prism,
+and Wedge through their native indexed action groups. Primary button behavior
+and keyboard defaults retain their existing tools.
+
+Native tests create a center rectangle and three-point circle through actual
+canvas clicks, preserving Sketcher task ownership. Primitive menu tests open
+native Box and subtractive Cylinder tasks, verify preview and Cancel, commit
+with native Undo/Redo, and save/reopen parametric FCStd geometry. Choice readiness
+is refreshed before opening and checked again after the popup releases focus.
+Changed document, viewer, edit owner, or workbench prevents stale dispatch.
+These cases validate selected operations; exposing a native choice does not
+establish completed acceptance for every specialist tool.
+
+Switching Dark/Light appearance refreshes retained Browser item brushes,
+Timeline text palettes, and the Browser filter placeholder. Native checks cover
+both appearances. The [Light ribbon screenshot](docs/fission-ribbon-light.png)
+shows the revised workspace and primitive tools.
 
 ## Move / Copy acceptance
 
@@ -176,10 +213,13 @@ partial.
 
 Primary local evidence:
 
-- `test-output/move-portable/smoke-results.json` and `persistence-report.json`:
-  all 45 installed GUI cases and separate restart processes, with native models,
+- `test-output/ribbon-portable/smoke-results.json` and `persistence-report.json`:
+  all 48 installed GUI cases and separate restart processes, with native models,
   exports, screenshots, logs, and completion markers.
-- `test-output/move-full/smoke-results.json`: passing 45-case build-tree run.
+- `test-output/ribbon-full/smoke-results.json`: passing 48-case build-tree run.
+- `test-output/ribbon-focused-5/ribbon-results.json`: three native icon/menu,
+  primitive task, and Sketcher variant groups; 127 rendered positions, 60 native
+  choices, Dark/Light colors, and document/edit-owner dispatch guards.
 - `test-output/move-focused-4/move-results.json`: four native Move / Copy groups,
   including actual transformed link vertices in both native placement modes.
 - `test-output/search-focused-4/search-results.json`: three focused native search
@@ -187,26 +227,29 @@ Primary local evidence:
 - `test-output/history-focused-4/history-results.json`: four focused native panel
   groups covering keyboard selection, inline labels, feature tasks, dependency
   prompts, multi-object Delete/Undo, keypad Enter, and component-aware Create Sketch.
-- `build/move-combined-tests.log`: 156 presentation/unit/real Qt checks.
+- `build/ribbon-combined-tests.log`: 162 presentation/unit/real Qt checks,
+  including native resource resolution and all 19 original SVG assets.
 - `test-output/canvas-4/canvas-results.json`: four focused canvas groups, including
   native sketch clicks and unchanged preference/geometry state.
 - `test-output/assembly-patch-validation.json`: deterministic generation,
   fresh-baseline application, normalized source equality, and reverse checking
   for all 25 adaptations.
-- `dist/0.6.0-alpha/staging/<stage>/verification`: installed native
+- `dist/0.7.0-alpha/staging/<stage>/verification`: installed native
   GUI/module/workbench checks and 13 command-line CAD cases.
 
-Extract `dist/0.6.0-alpha/Fission-Alpha-Windows-x64.zip` and open
+Extract `dist/0.7.0-alpha/Fission-Alpha-Windows-x64.zip` and open
 `Fission/bin/Fission.exe`. The companion `Fission-Alpha-source.zip` contains the
 matching applied engine/submodule and Fission source. `package-manifest.json`,
 `stage-manifest.json`, and `SOURCE_SHA256.json` record archive/native/source hashes.
 Native binaries under `bin`, `Mod`, and installed `lib` aliases are refreshed and
 verified. Final packaging repeats command-line CAD checks and tests both ZIPs.
 The runtime includes the editable machined-plate example and dependency licenses,
-notices, and SBOM. Earlier 0.1 through 0.5 artifacts are preserved. Tested
+notices, and SBOM. Earlier 0.1 through 0.6 artifacts are preserved. Tested
 milestones publish to the Fission origin repository's main branch after native
-acceptance and package verification. The tested 0.5 commits were published as
-`84edd20`; no changes are submitted to the FreeCAD upstream remote.
+acceptance and package verification. The prior 0.6 milestone is published at
+`dafb478d59c058cbe4573f26ae7607cc430533ae`; the 0.7 release follows the same
+acceptance and remote-SHA verification gate. No changes are submitted to the
+FreeCAD upstream remote.
 
 ## Prior evidence and remaining scope
 

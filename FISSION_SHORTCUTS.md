@@ -1,4 +1,4 @@
-# Fission 0.6 Alpha keyboard shortcuts
+# Fission 0.7 Alpha keyboard shortcuts
 
 Fission / Fusion is the default profile. These defaults come from Autodesk's public [Fusion keyboard reference](https://help.autodesk.com/cloudhelp/ENU/Fusion-GetStarted/files/GUID-F0491540-0324-470A-B651-2238D0EFAC30.htm), checked on October 3, 2026. They describe behavior; Fission includes no Autodesk icons, artwork, or application assets.
 
@@ -63,6 +63,23 @@ component instead of an individual modeling feature. Selecting a parent and its
 children moves the parent once. Sources and dependent links must move separately.
 Copies remain native parametric App::Link objects. Scaled links, link arrays,
 attached/expression/read-only placements, and active operations are unavailable.
+
+## Ribbon tool variants
+
+Ribbon arrows open native tool choices without changing the default keys above.
+For example, R remains the two-point rectangle; its arrow also offers Center
+Rectangle and Rounded Rectangle. C remains center-circle drawing, with
+three-point circles and ellipse variants in its menu. Arc, polygon, slot,
+spline, Trim, Project, and Dimension also expose related native choices.
+The Line/Polyline menu retains L for native Line.
+
+Solid **Primitive** and **Primitive Cut** each expose Box, Cylinder, Sphere,
+Cone, Ellipsoid, Torus, Prism, and Wedge. They have no new factory key. These
+choices use native parametric Part Design task dialogs and their indexed action
+groups. Readiness follows the active design and selection. The popup closes
+before invocation; changed document, viewer, workbench, or sketch edit ownership
+cancels a stale choice. Native command icons appear in the ribbon, search, and
+marking menu even before their workbench creates stock QActions.
 
 ## Marking menu
 
@@ -144,6 +161,6 @@ Run `python -m unittest discover -s tests -p test_shortcuts.py -v` for determini
 
 For real Qt event tests, set `FISSION_QT_TESTS=1` and `QT_QPA_PLATFORM=offscreen`, then run the same command with the LibPack Python runtime. These cover three-preset selection and persistence, legacy profile migration, dispatch through real Qt key events, stock-action collision/restoration, lazy action registration, typing in native editors, reserved-key handling, preferences rendering, and keyboard command search. The execution spy verifies dispatched IDs; geometry completion requires native CAD workflow tests.
 
-Run `scripts/test-gui.ps1` against the built or staged application for modeling and restart persistence. Use `-MoveOnly` for four native placement/copy/ownership groups, `-HistoryOnly` for four document-panel keyboard groups, `-SearchOnly` for three native toolbox groups, or `-WorkspacesOnly` for Drawing/CAM controls. The full runner also exercises the actual Stitch dialog with whole-object and face selections, tolerance editing, Cancel/OK, Undo/Redo, and FCStd save/reopen.
+Run `scripts/test-gui.ps1 -TimeoutSeconds 300` against the built or staged application for modeling and restart persistence. Use `-RibbonOnly` for three native icon/menu/primitive/Sketcher groups, `-MoveOnly` for four native placement/copy/ownership groups, `-HistoryOnly` for four document-panel keyboard groups, `-SearchOnly` for three native toolbox groups, or `-WorkspacesOnly` for Drawing/CAM controls. The full runner also exercises the actual Stitch dialog with whole-object and face selections, tolerance editing, Cancel/OK, Undo/Redo, and FCStd save/reopen.
 
-On October 5, 2026, the integrated native GUI suite passed all 45 cases, including native search-launched Fillet transactions, Sketcher canvas input, Drawing/CAM operations, Assembly, Stitch, selection and marking menus. Separate processes verified persisted search history and settings. The combined unit/Qt suite passed 156 tests. This is selected-tool acceptance; broader catalog commands and custom shortcuts still need native operation coverage. Check FISSION_STATUS.md and the generated JSON reports for the tested build.
+On October 5, 2026, the integrated native GUI suite passed all 48 cases, including native ribbon primitive tasks, center-rectangle/three-point-circle canvas input, search-launched Fillet transactions, Drawing/CAM operations, Assembly, Stitch, selection and marking menus. Separate processes verified persisted search history and settings. The combined unit/Qt suite passed 162 tests. All 127 registered ribbon positions render at 16/26 pixels in Dark and Light themes. This is selected-tool acceptance; broader catalog commands and custom shortcuts still need native operation coverage. Check FISSION_STATUS.md and the generated JSON reports in `test-output/ribbon-full` and `test-output/ribbon-portable` for the tested build.

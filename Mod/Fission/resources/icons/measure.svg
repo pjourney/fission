@@ -1,0 +1,9 @@
+<!-- SPDX-License-Identifier: MIT -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+  <title>Measure</title>
+  <g stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="m4 22 18-18 7 7-18 18z" fill="#e7edf3" stroke="#4f6978"/>
+    <path d="m8 18 4 4m0-8 3 3m1-7 4 4m0-8 3 3" stroke="#178f86"/>
+    <path d="M3 9V3h6M3 3l6 6" fill="none" stroke="#f2b36d"/>
+  </g>
+</svg>

@@ -187,7 +187,10 @@ class SearchDialog(_Dialog):
                 return manager
         return None
 
-    def _icon(self, name):
+    def _icon(self, name, command_id=None):
+        if command_id:
+            from .icons import resolve
+            return resolve(command_id)
         if not name:
             return QtGui.QIcon()
         path = Path(str(name))
@@ -249,7 +252,7 @@ class SearchDialog(_Dialog):
                     "Any workspace" if context_label in ("*", "all") else context_label.title(),
                     "Ready" if enabled else "Unavailable"])
                 item.setData(0, QtCore.Qt.UserRole, command_id)
-                item.setIcon(0, self._icon(entry.get("icon")))
+                item.setIcon(0, self._icon(entry.get("icon"), command_id))
                 aliases = entry.get("aliases", []) or []
                 aliases = ", ".join(aliases) if isinstance(aliases, (list, tuple)) else str(aliases)
                 hint = command_id + ("\n" + aliases if aliases else "")

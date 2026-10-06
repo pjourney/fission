@@ -31,8 +31,10 @@ def get_controller():
 
 TABS = {
     "SOLID": [
-        ("CREATE", ["CreateSketch", "Extrude", "Revolve", "Sweep", "Loft", "Hole"]),
-        ("MODIFY", ["Cut", "Fillet", "Chamfer", "Shell", "Draft", "Move", "Boolean"]),
+        ("CREATE", ["CreateSketch", "Extrude", "Revolve", "Sweep", "Loft", "Hole",
+                    ("PartDesign_CompPrimitiveAdditive", "Primitive")]),
+        ("MODIFY", ["Cut", "Fillet", "Chamfer", "Shell", "Draft", "Move", "Boolean",
+                    ("PartDesign_CompPrimitiveSubtractive", "Primitive Cut")]),
         ("PATTERN", ["Mirror", "RectPattern", "CircPattern"]),
         ("CONSTRUCT", ["Plane", "NewComponent"]),
         ("INSPECT", ["Measure"]),
@@ -119,14 +121,8 @@ def command_spec(item):
 
 
 def command_icon(command):
-    cmd = Gui.Command.get(command)
-    if not cmd:
-        return QtGui.QIcon(ICON)
-    actions = cmd.getAction()
-    if actions and not actions[0].icon().isNull():
-        return actions[0].icon()
-    pixmap = cmd.getInfo().get("pixmap", "")
-    return QtGui.QIcon(pixmap if os.path.isfile(pixmap) else ":/icons/" + pixmap + ".svg")
+    from .icons import resolve
+    return resolve(command)
 
 
 class DocumentObserver:
@@ -394,8 +390,73 @@ class Controller(QtCore.QObject):
         button.setProperty("fissionDescription", description)
         button.clicked.connect(lambda checked=False, cmd=command: self.execute(cmd))
         button.setProperty("fissionCommand", command)
+        self.add_variants(button, command)
         self.buttons.append(button)
         return button
+
+    def variant_context_token(self):
+        gui_document = Gui.activeDocument()
+        edit = gui_document.getInEdit() if gui_document else None
+        workbench = Gui.activeWorkbench()
+        return (self.command_context_token(), self.context(),
+                edit.Object if edit else None, workbench.name() if workbench else None)
+
+    def add_variants(self, button, command):
+        from .ribbon_tools import variants_for
+        variants = [entry for entry in variants_for(command) if Gui.Command.get(entry[0])]
+        if not variants:
+            return
+        menu = QtWidgets.QMenu(button)
+        menu.setObjectName("FissionVariants_" + command)
+        for identifier, title, index in variants:
+            icon = command_icon(identifier)
+            if index is not None:
+                native_actions = Gui.Command.get(identifier).getAction()
+                if 0 <= index < len(native_actions):
+                    icon = native_actions[index].icon()
+            action = menu.addAction(icon, title)
+            action.setProperty("fissionCommand", identifier)
+            action.setProperty("fissionCommandIndex", -1 if index is None else index)
+            action.triggered.connect(lambda checked=False, item=action: self.execute_variant(menu, item))
+        menu.aboutToShow.connect(lambda: self.refresh_variants(menu))
+        button.setMenu(menu)
+        button.setPopupMode(QtWidgets.QToolButton.MenuButtonPopup)
+
+    def refresh_variants(self, menu):
+        menu._fission_owner_token = self.variant_context_token()
+        self.refresh_command_state()
+        for action in menu.actions():
+            identifier = action.property("fissionCommand")
+            command = Gui.Command.get(identifier)
+            index = action.property("fissionCommandIndex")
+            native_actions = command.getAction() if command else []
+            enabled = self.command_available(identifier)
+            if index >= 0:
+                enabled = enabled and index < len(native_actions) and native_actions[index].isEnabled()
+            action.setEnabled(enabled)
+
+    def execute_variant(self, menu, action):
+        token = getattr(menu, "_fission_owner_token", None)
+        identifier = action.property("fissionCommand")
+        index = action.property("fissionCommandIndex")
+        def dispatch():
+            if (not self.active or self._activation_pending or token != self.variant_context_token()):
+                self.notify("The design or editing context changed; open the tool menu again.")
+                return
+            application = QtWidgets.QApplication.instance()
+            if application.activeModalWidget() or application.activePopupWidget():
+                self.notify("Close the open dialog or menu before running this tool.")
+                return
+            self.refresh_command_state()
+            if not self.command_available(identifier):
+                self.notify("This tool is unavailable for the current selection or operation.")
+                return
+            focus = self.command_focus_widget()
+            if focus is not None:
+                focus.setFocus(QtCore.Qt.OtherFocusReason)
+            self.execute(identifier, None if index < 0 else index)
+        # QMenu releases its popup/focus before native CAD handlers start.
+        QtCore.QTimer.singleShot(0, dispatch)
 
     def build_groups(self, tab):
         while self.group_layout.count():
@@ -454,11 +515,13 @@ class Controller(QtCore.QObject):
             row.addWidget(self.make_button(cmd, title, small=True))
         select = QtWidgets.QToolButton()
         select.setText("Select")
+        select.setIcon(command_icon("Fission_WindowSelection"))
         select.setPopupMode(QtWidgets.QToolButton.InstantPopup)
         menu = QtWidgets.QMenu(select)
         for command, title in (("WindowSelection", "Window  1"), ("FreeformSelection", "Freeform  2"),
                                ("PaintSelection", "Paint  3")):
-            menu.addAction(title, lambda checked=False, name=command: self.execute("Fission_" + name))
+            menu.addAction(command_icon("Fission_" + command), title,
+                           lambda checked=False, name=command: self.execute("Fission_" + name))
         select.setMenu(menu)
         row.addWidget(select)
         row.addWidget(self.make_button("Fission_MarkingMenu", "Marking Menu", small=True))
@@ -564,7 +627,7 @@ class Controller(QtCore.QObject):
         # a Fission-only workbench name in otherwise compatible FCStd files.
         return
 
-    def execute(self, command_id):
+    def execute(self, command_id, command_index=None):
         try:
             if self.paint.viewport is not None and command_id not in (
                     "Fission_WindowSelection", "Fission_FreeformSelection", "Fission_PaintSelection"):
@@ -586,7 +649,14 @@ class Controller(QtCore.QObject):
                 if actions and not any(action.isEnabled() for action in actions):
                     self.notify("Finish or cancel the active operation before using this command.")
                     return False
-            Gui.runCommand(command_id)
+            if command_index is None:
+                Gui.runCommand(command_id)
+            else:
+                actions = cmd.getAction()
+                if not (0 <= command_index < len(actions) and actions[command_index].isEnabled()):
+                    self.notify("This tool variant is unavailable for the current operation.")
+                    return False
+                Gui.runCommand(command_id, command_index)
             QtCore.QTimer.singleShot(0, self.refresh_context)
             return True
         except Exception as err:
@@ -636,7 +706,7 @@ class Controller(QtCore.QObject):
             PreferencesDialog(self, self.main).exec()
         elif name == "About":
             QtWidgets.QMessageBox.about(self.main, "About Fission",
-                "<h2>Fission 0.6 Alpha</h2><p>Local parametric mechanical design.</p>"
+                "<h2>Fission 0.7 Alpha</h2><p>Local parametric mechanical design.</p>"
                 "<p>Fission is based on the FreeCAD open-source project.</p>"
                 "<p>FreeCAD's contributors retain their copyrights. Engine: LGPL 2.1 or later; "
                 "Fission presentation: MIT and LGPL, as identified in each source file. See the bundled NOTICE and licenses.</p>"
@@ -812,6 +882,11 @@ class Controller(QtCore.QObject):
         """Refresh native action ownership once for an explicit toolbox update."""
         if self.active and not self._activation_pending:
             self._search_command_ids = {button.property("fissionCommand") for button in self.buttons}
+            for button in self.buttons:
+                menu = button.menu()
+                if menu:
+                    self._search_command_ids.update(action.property("fissionCommand")
+                                                    for action in menu.actions())
             if not hasattr(self, "_search_factory_bindings"):
                 from .shortcuts import ShortcutProfile
                 self._search_factory_bindings = ShortcutProfile().bindings

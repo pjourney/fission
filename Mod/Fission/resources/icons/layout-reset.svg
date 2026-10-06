@@ -1,0 +1,9 @@
+<!-- SPDX-License-Identifier: MIT -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+  <title>Reset workspace layout</title>
+  <g stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="4" width="25" height="24" rx="2" fill="none" stroke="#7c96a5"/>
+    <path d="M3 10h25M10 10v18M10 22h18" fill="none" stroke="#22b7a8"/>
+    <path d="M24 15a5 5 0 1 0-2 5M24 12v4h-4" fill="none" stroke="#f2b36d"/>
+  </g>
+</svg>

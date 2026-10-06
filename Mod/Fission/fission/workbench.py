@@ -17,6 +17,10 @@ class FissionWorkbench(Gui.Workbench):
                                    "Fission_Extrude", "Fission_Fillet", "Fission_Hole",
                                    "Fission_FinishSketch", "Fission_Search"])
         self.appendMenu("&Fission", ["Fission_Preferences", "Fission_About"])
+        # Native primitive commands require their ActionGroup to exist before
+        # activation. The menu creates it and retains stock indexed task tools.
+        self.appendMenu(["&Design", "Primitives"], ["PartDesign_CompPrimitiveAdditive",
+                                                   "PartDesign_CompPrimitiveSubtractive"])
 
     def Activated(self):
         from .shell import get_controller

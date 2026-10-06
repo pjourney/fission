@@ -18,6 +18,7 @@ class Timeline(_DocumentDock):
         self._items = {}
         self._features = []
         wrapper = QtWidgets.QWidget(self)
+        wrapper.setObjectName("FissionTimelineContent")
         layout = QtWidgets.QVBoxLayout(wrapper)
         layout.setContentsMargins(10, 3, 10, 5)
         header = QtWidgets.QHBoxLayout()
@@ -25,6 +26,7 @@ class Timeline(_DocumentDock):
         self.description.setObjectName("FissionTimelineHint")
         header.addWidget(self.description, 1)
         self.recompute_button = QtWidgets.QToolButton()
+        self.recompute_button.setObjectName("FissionTimelineRecompute")
         self.recompute_button.setText("Recompute")
         self.recompute_button.setToolTip("Recompute the active design using its native dependency graph")
         self.recompute_button.clicked.connect(lambda: controller.execute("Std_Refresh"))

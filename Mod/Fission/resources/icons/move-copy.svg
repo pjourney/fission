@@ -1,0 +1,10 @@
+<!-- SPDX-License-Identifier: MIT -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+  <title>Move and linked copy</title>
+  <g stroke-linecap="round" stroke-linejoin="round">
+    <path d="M5 13h12v12H5z" fill="#e7edf3" stroke="#4f6978" stroke-width="2"/>
+    <path d="M10 18h12v12H10z" fill="#22b7a8" fill-opacity=".22" stroke="#22b7a8" stroke-width="2"/>
+    <path d="M3 7h23m-4-4 4 4-4 4M27 14v13m-3-4 3 4 3-4" fill="none" stroke="#22b7a8" stroke-width="2.4"/>
+    <path d="M14 22h4" stroke="#f2b36d" stroke-width="2.4"/>
+  </g>
+</svg>

@@ -1,0 +1,11 @@
+<!-- SPDX-License-Identifier: MIT -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+  <title>Document browser</title>
+  <g stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M6 7v18h7M6 16h7" fill="none" stroke="#7c96a5"/>
+    <rect x="3" y="3" width="8" height="7" rx="1" fill="#22b7a8" stroke="#178f86"/>
+    <rect x="14" y="12" width="14" height="7" rx="1" fill="#e7edf3" stroke="#4f6978"/>
+    <rect x="14" y="22" width="14" height="7" rx="1" fill="#e7edf3" stroke="#4f6978"/>
+    <path d="M19 15.5h5M19 25.5h5" stroke="#22b7a8"/>
+  </g>
+</svg>

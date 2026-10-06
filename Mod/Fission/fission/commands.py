@@ -85,6 +85,14 @@ class FissionCommand:
 
     def GetResources(self):
         title, backend, icon, aliases, context = COMMANDS[self.name]
+        from .icons import owned_resource
+        owned = owned_resource("Fission_" + self.name)
+        if owned:
+            icon = owned
+        else:
+            native = Gui.Command.get(backend or icon)
+            if native:
+                icon = native.getInfo().get("pixmap", icon) or icon
         return {"MenuText": title, "ToolTip": title + " — " + aliases,
                 "Pixmap": icon, "CmdType": "NoTransaction ForEdit" if context in ("sketch", "assembly") or self.name in ("Extrude", "Cut", "ToggleViewCube", "ToggleNavigation", "PreviousWorkspace", "NextWorkspace", "WindowSelection", "FreeformSelection", "PaintSelection", "MarkingMenu") else "NoTransaction"}
 

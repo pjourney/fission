@@ -1,0 +1,8 @@
+<!-- SPDX-License-Identifier: MIT -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+  <title>Recompute all</title>
+  <g fill="none" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M27 12A12 12 0 0 0 5 9M5 20a12 12 0 0 0 22 3M27 5v7h-7M5 27v-7h7" stroke="#22b7a8"/>
+    <path d="m15 10-5 8h6l-1 5 7-9h-6l1-4z" fill="#f2b36d" stroke="#4f6978" stroke-width="1.5"/>
+  </g>
+</svg>

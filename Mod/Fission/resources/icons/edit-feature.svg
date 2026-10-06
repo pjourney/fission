@@ -1,0 +1,11 @@
+<!-- SPDX-License-Identifier: MIT -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+  <title>Edit feature</title>
+  <g stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="m3 12 9-5 9 5v11l-9 5-9-5z" fill="#e7edf3" stroke="#4f6978"/>
+    <path d="m3 12 9 5 9-5M12 17v11" fill="none" stroke="#22b7a8"/>
+    <path d="m15 22 1-6L26 6l4 4-10 10z" fill="#22b7a8" stroke="#178f86"/>
+    <path d="m24 8 4 4" stroke="#e7edf3"/>
+    <path d="m16 16 4 4-5 2z" fill="#f2b36d" stroke="#4f6978" stroke-width="1.5"/>
+  </g>
+</svg>

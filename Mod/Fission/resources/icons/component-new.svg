@@ -1,0 +1,10 @@
+<!-- SPDX-License-Identifier: MIT -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+  <title>New component</title>
+  <g stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="m4 12 10-6 10 6v12l-10 6-10-6z" fill="#e7edf3" stroke="#4f6978"/>
+    <path d="m4 12 10 6 10-6M14 18v12" fill="none" stroke="#22b7a8"/>
+    <circle cx="25" cy="7" r="6" fill="#178f86" stroke="#178f86"/>
+    <path d="M22 7h6M25 4v6" stroke="#e7edf3"/>
+  </g>
+</svg>

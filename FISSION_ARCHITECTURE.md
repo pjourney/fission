@@ -1,8 +1,8 @@
-# Fission 0.6 Alpha architecture
+# Fission 0.7 Alpha architecture
 
-Fission `0.6.0-alpha` builds the pinned FreeCAD C++ application with a small
+Fission `0.7.0-alpha` builds the pinned FreeCAD C++ application with a small
 identity/navigation patch and a shared native Qt shell for Design, Drawing,
-and Manufacture. Product labels use **Fission 0.6 Alpha**. The engine retains
+and Manufacture. Product labels use **Fission 0.7 Alpha**. The engine retains
 its upstream version for document migrations and FCStd compatibility.
 
 ## Core and presentation boundary
@@ -24,6 +24,38 @@ Sketch toolbar, navigation strip, local start page and integration controller.
 editors occupy the right Tasks panel; native property editing remains available.
 New designs contain a real App::Part component and PartDesign::Body; activating
 another component changes native active containers rather than a synthetic model.
+
+## Ribbon resources and native variants
+
+`icons.py` resolves native backend command pixmap names through Gui.getIcon
+before examining file/resource/theme candidates and native QAction icons.
+It preserves exact resource aliases and SVG suffixes, and works when a native
+command is registered before its workbench creates QActions. A rendered-pixel
+check rejects non-null but empty/transparent QIcons. No missing-command result
+is cached, so later workbench registration immediately supplies native artwork.
+Ribbon, search, and marking menu use this shared resolver. Original MIT assets
+in `resources/icons` distinguish Fission's shell tools; valid native CAD artwork
+keeps its upstream implementation and license. This corrects 40 blank positions
+found in the native inventory without replacing working native icons.
+
+`ribbon_tools.py` records 13 split-button families and 60 registered native menu
+choices. Sketcher variants retain their own command IDs. Part Design's additive
+and subtractive primitives use the native group command with its audited item
+index; their eight item action names are not invented command registrations.
+Shell dispatch calls Gui.runCommand with that native index. Primary button
+clicks and keyboard defaults retain their existing tools. Missing optional
+commands are omitted from the ribbon; CAM_Surface is absent in this build.
+
+Menus capture document/view/context, edit owner, and workbench when opening.
+Native readiness is refreshed for each choice and indexed action. Dispatch waits
+until Qt releases popup/focus ownership, verifies the captured token and current
+readiness again, then restores native canvas focus. Native modeling tools keep
+their task dialogs, parametric feature types, transactions, and file semantics.
+
+Theme changes explicitly refresh Browser/Timeline text palettes, retained item
+brushes, and the Browser filter placeholder. This avoids a native dark palette
+leaving document labels faint after selecting Light appearance. Native feature
+editors retain their own validation colors.
 
 ## Native Move / Copy
 
@@ -218,15 +250,15 @@ tests save/reopen and interchange, and exposes the actual GUI Stitch
 accept/cancel/Undo/Redo case to the serial runner. Its App-only cases can run
 under `FissionCmd.exe` with `FISSION_SPECIALIST_AUTORUN=1`.
 
-The 0.6 build-tree and installed portable suites each passed 45 native GUI cases
-and separate restart checks; all 156 presentation/Qt tests and 26 native CTest
+The 0.7 build-tree and installed portable suites each passed 48 native GUI cases
+and separate restart checks; all 162 presentation/Qt tests and 26 native CTest
 executables passed. Canvas acceptance includes native concave selection, linked
 paint/escape paths, idle Assembly, actual Fillet tasks, actual Sketcher line clicks,
 configuration resets, stationary click guards after popup fitting, and New Design
 from Drawing. `scripts/test-gui.ps1 -CanvasOnly` runs four focused canvas groups.
 Command search adds actual native Fillet tasks, Sketcher line clicks, readiness,
 focus and document-lifetime checks. `scripts/test-gui.ps1 -SearchOnly` runs three
-focused search groups. Primary installed reports are in `test-output/move-portable`.
+focused search groups. Primary installed reports are in `test-output/ribbon-portable`.
 `scripts/test-gui.ps1 -HistoryOnly` runs four focused document-panel keyboard
 groups. They exercise real label editors and selection keys, native feature
 preview/Cancel/OK, dependency warning rejection, multi-object Delete with one Undo,
@@ -235,6 +267,14 @@ task/pending guards, and component-scoped Create Sketch from the shared menu.
 including rotated parent frames, real M and Ctrl+Z/Ctrl+Y events, preview Cancel,
 mesh movement, linked-copy vertices in both placement modes, source recompute,
 FCStd reopen, foreign bookings, and closed documents.
+`scripts/test-gui.ps1 -RibbonOnly` runs three native ribbon groups. All 127
+registered positions render at 16/26 pixels in Dark and Light appearances.
+Native Box and subtractive Cylinder menus exercise preview/Cancel/OK/Undo/Redo
+and parametric FCStd reopen. Center Rectangle and 3-Point Circle choices draw
+real solver geometry through canvas clicks; task and stale-edit guards pass.
+Six real Qt icon regressions also cover exact SVG resource names, wrapper backend
+pixmaps, transparent payloads, later native registration, action fallbacks, and
+the 19 original SVG glyphs at both menu and ribbon sizes.
 
 Earlier native acceptance for the 0.2 workspace, Stitch, cube, and navigation-strip
 controls was exercised on October 4, 2026. The targeted workspace run passed
