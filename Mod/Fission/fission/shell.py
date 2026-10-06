@@ -275,6 +275,8 @@ class Controller(QtCore.QObject):
             self.show_welcome()
 
     def deactivate(self):
+        if hasattr(self, "move_dialog"):
+            self.move_dialog.reject()
         self.save_layout()
         self.marking.close()
         self.paint.cancel()
@@ -634,7 +636,7 @@ class Controller(QtCore.QObject):
             PreferencesDialog(self, self.main).exec()
         elif name == "About":
             QtWidgets.QMessageBox.about(self.main, "About Fission",
-                "<h2>Fission 0.5 Alpha</h2><p>Local parametric mechanical design.</p>"
+                "<h2>Fission 0.6 Alpha</h2><p>Local parametric mechanical design.</p>"
                 "<p>Fission is based on the FreeCAD open-source project.</p>"
                 "<p>FreeCAD's contributors retain their copyrights. Engine: LGPL 2.1 or later; "
                 "Fission presentation: MIT and LGPL, as identified in each source file. See the bundled NOTICE and licenses.</p>"
@@ -800,54 +802,8 @@ class Controller(QtCore.QObject):
         return result
 
     def move_copy(self):
-        if App.ActiveDocument and App.ActiveDocument.HasPendingTransaction:
-            self.notify("Finish or cancel the active feature before Move / Copy.")
-            return
-        selected = Gui.Selection.getSelection()
-        if not selected:
-            self.notify("Select a component or body to Move / Copy.")
-            return
-        dialog = QtWidgets.QDialog(self.main)
-        dialog.setWindowTitle("Move / Copy")
-        layout = QtWidgets.QFormLayout(dialog)
-        layout.addRow(QtWidgets.QLabel("Translate selected components or bodies. Use Transform for rotation and canvas handles."))
-        axes = []
-        for title in ("X (mm)", "Y (mm)", "Z (mm)"):
-            field = QtWidgets.QDoubleSpinBox()
-            field.setRange(-1e6, 1e6)
-            field.setDecimals(4)
-            layout.addRow(title, field)
-            axes.append(field)
-        copy = QtWidgets.QCheckBox("Create linked copies (source geometry remains parametric)")
-        layout.addRow(copy)
-        manip = QtWidgets.QPushButton("Canvas Transform…")
-        manip.clicked.connect(lambda: (dialog.reject(), self.execute("Std_Transform")))
-        layout.addRow(manip)
-        buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
-        buttons.accepted.connect(dialog.accept)
-        buttons.rejected.connect(dialog.reject)
-        layout.addRow(buttons)
-        if dialog.exec() != QtWidgets.QDialog.Accepted:
-            return
-        doc = App.ActiveDocument
-        doc.openTransaction("Move / Copy")
-        try:
-            for obj in selected:
-                target = obj
-                if copy.isChecked():
-                    target = doc.addObject("App::Link", "Copy")
-                    target.setLink(obj)
-                    target.Label = obj.Label + " Copy"
-                if "Placement" not in target.PropertiesList:
-                    raise ValueError("%s has no editable placement" % obj.Label)
-                placement = App.Placement(target.Placement)
-                placement.Base += App.Vector(*(field.value() for field in axes))
-                target.Placement = placement
-            doc.recompute()
-            doc.commitTransaction()
-        except Exception:
-            doc.abortTransaction()
-            raise
+        from .move import run
+        return run(self)
 
     def command_catalog(self):
         return catalog()
@@ -961,6 +917,8 @@ class Controller(QtCore.QObject):
             self.reset_layout()
 
     def shutdown(self):
+        if hasattr(self, "move_dialog"):
+            self.move_dialog.reject()
         self.timer.stop()
         if hasattr(self, "search_dialog"):
             self.search_dialog.close()

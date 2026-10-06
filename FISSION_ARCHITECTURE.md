@@ -1,8 +1,8 @@
-# Fission 0.5 Alpha architecture
+# Fission 0.6 Alpha architecture
 
-Fission `0.5.0-alpha` builds the pinned FreeCAD C++ application with a small
+Fission `0.6.0-alpha` builds the pinned FreeCAD C++ application with a small
 identity/navigation patch and a shared native Qt shell for Design, Drawing,
-and Manufacture. Product labels use **Fission 0.5 Alpha**. The engine retains
+and Manufacture. Product labels use **Fission 0.6 Alpha**. The engine retains
 its upstream version for document migrations and FCStd compatibility.
 
 ## Core and presentation boundary
@@ -24,6 +24,29 @@ Sketch toolbar, navigation strip, local start page and integration controller.
 editors occupy the right Tasks panel; native property editing remains available.
 New designs contain a real App::Part component and PartDesign::Body; activating
 another component changes native active containers rather than a synthetic model.
+
+## Native Move / Copy
+
+`move.py` validates native coordinate-system containment and supported movable
+types before opening an application-modal Qt dialog. Selection deduplication uses
+GeoFeatureGroup parents, not general dependencies. Linked sources and dependent
+links are rejected together to prevent inherited placements compounding a move.
+Public native parent placements compose the design frame; the inverse frame maps
+the design-axis delta and X/Y/Z rotation back to the object's local Placement or
+LinkPlacement. Rotation preserves each target's placement origin. Mesh geometry
+and native parametric dependencies remain intact.
+
+Preview lazily opens one native transaction and captures getBookedTransactionID,
+which exists before HasPendingTransaction becomes true. Cancel/no-op abort only
+that ID; OK revalidates after recompute before committing. Owner document/view/
+context, native edit owner, target identities/poses, containment frames, link
+modes/sources, and preview-copy identities/poses are checked on updates and a
+timer. Foreign bookings are never aborted or committed. Source wrappers invalidated
+by native deletion/closure cancel safely; shell deactivation/shutdown rejects the
+dialog. Copies use App::Link with LinkTransform false in the source component,
+retaining source dependencies and native Undo/FCStd serialization. No custom
+document feature, proxy, or geometry kernel is added. Assembly descendants keep
+native solver movement ownership; whole assembly containers remain movable.
 
 ## Workspaces and layout
 
@@ -195,19 +218,23 @@ tests save/reopen and interchange, and exposes the actual GUI Stitch
 accept/cancel/Undo/Redo case to the serial runner. Its App-only cases can run
 under `FissionCmd.exe` with `FISSION_SPECIALIST_AUTORUN=1`.
 
-The 0.5 build-tree and installed portable suites each passed 41 native GUI cases
-and separate restart checks; all 127 presentation/Qt tests and 26 native CTest
+The 0.6 build-tree and installed portable suites each passed 45 native GUI cases
+and separate restart checks; all 156 presentation/Qt tests and 26 native CTest
 executables passed. Canvas acceptance includes native concave selection, linked
 paint/escape paths, idle Assembly, actual Fillet tasks, actual Sketcher line clicks,
 configuration resets, stationary click guards after popup fitting, and New Design
 from Drawing. `scripts/test-gui.ps1 -CanvasOnly` runs four focused canvas groups.
 Command search adds actual native Fillet tasks, Sketcher line clicks, readiness,
 focus and document-lifetime checks. `scripts/test-gui.ps1 -SearchOnly` runs three
-focused search groups. Primary installed reports are in `test-output/history-portable`.
+focused search groups. Primary installed reports are in `test-output/move-portable`.
 `scripts/test-gui.ps1 -HistoryOnly` runs four focused document-panel keyboard
 groups. They exercise real label editors and selection keys, native feature
 preview/Cancel/OK, dependency warning rejection, multi-object Delete with one Undo,
 task/pending guards, and component-scoped Create Sketch from the shared menu.
+`scripts/test-gui.ps1 -MoveOnly` runs four native placement/copy/ownership groups,
+including rotated parent frames, real M and Ctrl+Z/Ctrl+Y events, preview Cancel,
+mesh movement, linked-copy vertices in both placement modes, source recompute,
+FCStd reopen, foreign bookings, and closed documents.
 
 Earlier native acceptance for the 0.2 workspace, Stitch, cube, and navigation-strip
 controls was exercised on October 4, 2026. The targeted workspace run passed

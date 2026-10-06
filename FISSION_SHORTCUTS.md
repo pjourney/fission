@@ -1,4 +1,4 @@
-# Fission 0.5 Alpha keyboard shortcuts
+# Fission 0.6 Alpha keyboard shortcuts
 
 Fission / Fusion is the default profile. These defaults come from Autodesk's public [Fusion keyboard reference](https://help.autodesk.com/cloudhelp/ENU/Fusion-GetStarted/files/GUID-F0491540-0324-470A-B651-2238D0EFAC30.htm), checked on October 3, 2026. They describe behavior; Fission includes no Autodesk icons, artwork, or application assets.
 
@@ -21,7 +21,7 @@ focused, taking precedence over camera shortcuts or Custom assignments.
 | Press Pull | Q | Fission_Extrude | Model / sketch | Partial: sketch extrusion; face offset is not implemented |
 | Fillet | F | Fission_Fillet | Model | Mapped |
 | Hole | H | Fission_Hole | Model | Mapped |
-| Move | M | Fission_Move | Model / assembly / surface / mesh | Mapped to Fission's Move / Copy adapter |
+| Move | M | Fission_Move | Model / assembly / surface / mesh | Design-axis translation/rotation preview, Cancel, one native Undo, same-component linked copies; assembly members use native dragging/joints |
 | Visibility | V | Fission_Visibility | Any | Mapped |
 | Appearance | A | Fission_Appearance | Model / sketch / assembly / surface / mesh | Native Std_SetAppearance editor |
 | Measure | I | Fission_Measure | Model / sketch / assembly / surface / mesh | Mapped |
@@ -56,6 +56,13 @@ focused, taking precedence over camera shortcuts or Custom assignments.
 | Window Selection | 1 | Fission_WindowSelection | Idle 3D model / assembly / surface / mesh / CAM | Native rectangle, projected-center and crossing behavior; Ctrl adds |
 | Freeform Selection | 2 | Fission_FreeformSelection | Idle 3D model / assembly / surface / mesh / CAM | Native freehand polygon, projected object centers; Ctrl adds |
 | Paint Selection | 3 | Fission_PaintSelection | Idle 3D model / assembly / surface / mesh / CAM | One left-drag stroke selects frontmost objects through native ray picking; Ctrl adds, Escape restores |
+
+M rotates X, then Y, then Z around each selected object's placement origin.
+Translation uses design axes even inside rotated components. Select the body or
+component instead of an individual modeling feature. Selecting a parent and its
+children moves the parent once. Sources and dependent links must move separately.
+Copies remain native parametric App::Link objects. Scaled links, link arrays,
+attached/expression/read-only placements, and active operations are unavailable.
 
 ## Marking menu
 
@@ -137,6 +144,6 @@ Run `python -m unittest discover -s tests -p test_shortcuts.py -v` for determini
 
 For real Qt event tests, set `FISSION_QT_TESTS=1` and `QT_QPA_PLATFORM=offscreen`, then run the same command with the LibPack Python runtime. These cover three-preset selection and persistence, legacy profile migration, dispatch through real Qt key events, stock-action collision/restoration, lazy action registration, typing in native editors, reserved-key handling, preferences rendering, and keyboard command search. The execution spy verifies dispatched IDs; geometry completion requires native CAD workflow tests.
 
-Run `scripts/test-gui.ps1` against the built or staged application for modeling and restart persistence. Use `-HistoryOnly` for four document-panel keyboard groups, `-SearchOnly` for three native toolbox groups, or `-WorkspacesOnly` for Drawing/CAM controls. The full runner also exercises the actual Stitch dialog with whole-object and face selections, tolerance editing, Cancel/OK, Undo/Redo, and FCStd save/reopen.
+Run `scripts/test-gui.ps1` against the built or staged application for modeling and restart persistence. Use `-MoveOnly` for four native placement/copy/ownership groups, `-HistoryOnly` for four document-panel keyboard groups, `-SearchOnly` for three native toolbox groups, or `-WorkspacesOnly` for Drawing/CAM controls. The full runner also exercises the actual Stitch dialog with whole-object and face selections, tolerance editing, Cancel/OK, Undo/Redo, and FCStd save/reopen.
 
-On October 5, 2026, the integrated native GUI suite passed all 41 cases, including native search-launched Fillet transactions, Sketcher canvas input, Drawing/CAM operations, Assembly, Stitch, selection and marking menus. Separate processes verified persisted search history and settings. The combined unit/Qt suite passed 127 tests. This is selected-tool acceptance; broader catalog commands and custom shortcuts still need native operation coverage. Check FISSION_STATUS.md and the generated JSON reports for the tested build.
+On October 5, 2026, the integrated native GUI suite passed all 45 cases, including native search-launched Fillet transactions, Sketcher canvas input, Drawing/CAM operations, Assembly, Stitch, selection and marking menus. Separate processes verified persisted search history and settings. The combined unit/Qt suite passed 156 tests. This is selected-tool acceptance; broader catalog commands and custom shortcuts still need native operation coverage. Check FISSION_STATUS.md and the generated JSON reports for the tested build.

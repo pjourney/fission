@@ -575,6 +575,15 @@ def run_fission_smoke():
                     lambda: history_workflows.deletion(controller, settle, report.output))
         report.case("Panel Create sketch native task scoped to active empty component",
                     lambda: history_workflows.component_sketch(controller, settle, report.output))
+        import move_workflows
+        report.case("Native M nested design axes rotation preview Cancel OK Undo Redo",
+                    lambda: move_workflows.nested_placement(controller, settle, report.output))
+        report.case("Native Move containment dedup rotation origins no-op and mesh",
+                    lambda: move_workflows.contained_selection(controller, settle, report.output))
+        report.case("Native linked copy Cancel Undo Redo Link modes parametric FCStd",
+                    lambda: move_workflows.linked_copies(controller, settle, report.output))
+        report.case("Native Move booking document and assembly ownership guards",
+                    lambda: move_workflows.ownership(controller, settle, report.output))
         App.setActiveDocument(doc.Name)
         controller.refresh_context()
         settle()

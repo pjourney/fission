@@ -1,8 +1,10 @@
-# Fission 0.5 Alpha
+# Fission 0.6 Alpha
 
-Fission `0.5.0-alpha` adds keyboard editing and inline rename to the Browser and
-Timeline, preserves multi-object native deletion, and scopes their Create Sketch
-menus to the active component. Design, Drawing, and Manufacture retain the shared
+Fission `0.6.0-alpha` adds transactional Move / Copy with design-axis translation,
+rotation, live preview, and native linked copies in the source component.
+Browser and Timeline retain keyboard editing, inline rename, multi-object native
+deletion, and Create Sketch scoped to the active component. Design, Drawing,
+and Manufacture retain the shared
 shell, complete S command toolbox with persistent recents, configurable
 marking menu, native selection tools, and FreeCAD CAD operations.
 The pinned engine keeps version 27.1 for document compatibility. Sketch solving,
@@ -18,9 +20,9 @@ Python 3.14.7, OpenCASCADE 8.0.1. FreeCAD pin:
 | --- | --- |
 | Native source compilation | Passed |
 | Native CTest executables | 26/26 passed |
-| Fission profiles/history/panels/marking/search and real Qt tests | 127/127 passed |
-| Build-tree integrated native GUI suite | 41/41 passed |
-| Installed portable integrated native GUI suite | 41/41 passed |
+| Fission profiles/history/move/panels/marking/search and real Qt tests | 156/156 passed |
+| Build-tree integrated native GUI suite | 45/45 passed |
+| Installed portable integrated native GUI suite | 45/45 passed |
 | Portable settings writer/reader in separate processes | Both passed |
 | Installed command-line CAD workflows | 13/13 passed |
 | Installed native workbenches and module/resource paths | All nine passed |
@@ -31,6 +33,37 @@ embedded Python, native modules, and resources. Actual Qt events invoke native
 tools and tasks. These are selected acceptance workflows rather than complete
 coverage of every exposed command. The source/runtime hashes and archive
 integrity checks are recorded in the delivery manifests.
+
+## Move / Copy acceptance
+
+Actual M opens a native Qt dialog for components, bodies, whole unscaled links,
+and standalone Part or Mesh geometry. Translation follows design X/Y/Z axes
+through rotated parent components. Rotation applies X, then Y, then Z around
+each object's own native placement origin. A selected parent removes selected
+descendants before validation, so a component/body/feature selection moves once.
+Body-owned modeling features, attached/expression/read-only placements, arrays,
+scaled links, mixed unsupported selections, and assembly members are refused.
+Assembly members retain native dragging and solver/joint ownership; a whole
+assembly container can move. Sources and their dependent selected links must
+move separately, preventing compounded geometry transformations.
+
+Live preview changes native placements inside one booked native transaction.
+Cancel restores placements and removes temporary copies. Unchanged OK, including
+returning preview values to zero, creates no Undo entry. OK commits one operation;
+actual Ctrl+Z/Ctrl+Y restore the prior and accepted poses. Native UndoCount
+includes the still-active preview transaction. Copies are real App::Link objects,
+keep the source's component, and leave source placements unchanged. Both native
+LinkTransform modes and link-of-link copies preserve their dependency, geometry,
+Undo/Redo, containment, and FCStd save/reopen. Source dimension changes recompute
+the copies before and after reopening.
+
+The dialog captures document, viewer, workbench, edit owner, selected identities,
+parent frames, link sources/modes, and its booked transaction ID. Existing empty
+bookings also block entry. Changed/closed documents and modeling contexts cancel
+an owned preview. An externally replaced booking is preserved: native replacement
+already commits the preview, whose ordinary Undo remains available after the
+foreign operation closes. Closing native Python wrappers cancels safely. Shell
+deactivation and shutdown also close the dialog and abort only its own booking.
 
 ## Browser and Timeline keyboard acceptance
 
@@ -143,33 +176,37 @@ partial.
 
 Primary local evidence:
 
-- `test-output/history-portable/smoke-results.json` and `persistence-report.json`:
-  all 41 installed GUI cases and separate restart processes, with native models,
+- `test-output/move-portable/smoke-results.json` and `persistence-report.json`:
+  all 45 installed GUI cases and separate restart processes, with native models,
   exports, screenshots, logs, and completion markers.
-- `test-output/history-full/smoke-results.json`: passing 41-case build-tree run.
+- `test-output/move-full/smoke-results.json`: passing 45-case build-tree run.
+- `test-output/move-focused-4/move-results.json`: four native Move / Copy groups,
+  including actual transformed link vertices in both native placement modes.
 - `test-output/search-focused-4/search-results.json`: three focused native search
   groups, complete catalog/readiness checks, Fillet transactions and Sketcher clicks.
 - `test-output/history-focused-4/history-results.json`: four focused native panel
   groups covering keyboard selection, inline labels, feature tasks, dependency
   prompts, multi-object Delete/Undo, keypad Enter, and component-aware Create Sketch.
-- `build/history-combined-tests.log`: 127 presentation/unit/real Qt checks.
+- `build/move-combined-tests.log`: 156 presentation/unit/real Qt checks.
 - `test-output/canvas-4/canvas-results.json`: four focused canvas groups, including
   native sketch clicks and unchanged preference/geometry state.
 - `test-output/assembly-patch-validation.json`: deterministic generation,
   fresh-baseline application, normalized source equality, and reverse checking
   for all 25 adaptations.
-- `dist/0.5.0-alpha/staging/<stage>/verification`: installed native
+- `dist/0.6.0-alpha/staging/<stage>/verification`: installed native
   GUI/module/workbench checks and 13 command-line CAD cases.
 
-Extract `dist/0.5.0-alpha/Fission-Alpha-Windows-x64.zip` and open
+Extract `dist/0.6.0-alpha/Fission-Alpha-Windows-x64.zip` and open
 `Fission/bin/Fission.exe`. The companion `Fission-Alpha-source.zip` contains the
 matching applied engine/submodule and Fission source. `package-manifest.json`,
 `stage-manifest.json`, and `SOURCE_SHA256.json` record archive/native/source hashes.
 Native binaries under `bin`, `Mod`, and installed `lib` aliases are refreshed and
 verified. Final packaging repeats command-line CAD checks and tests both ZIPs.
 The runtime includes the editable machined-plate example and dependency licenses,
-notices, and SBOM. Earlier 0.1, 0.2, 0.3, and 0.4 artifacts are preserved. No remote push or
-upstream submission was made.
+notices, and SBOM. Earlier 0.1 through 0.5 artifacts are preserved. Tested
+milestones publish to the Fission origin repository's main branch after native
+acceptance and package verification. The tested 0.5 commits were published as
+`84edd20`; no changes are submitted to the FreeCAD upstream remote.
 
 ## Prior evidence and remaining scope
 

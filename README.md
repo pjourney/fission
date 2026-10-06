@@ -1,6 +1,6 @@
 # Fission
 
-Fission 0.5 Alpha is native parametric mechanical CAD, built from pinned FreeCAD source with unified
+Fission 0.6 Alpha is native parametric mechanical CAD, built from pinned FreeCAD source with unified
 Design, Drawing and Manufacture workspaces, a product Browser, horizontal feature Timeline, and
 Fusion-familiar keyboard and mouse controls. Original Fission branding; the
 FreeCAD document model, constraint solver and geometry engine remain authoritative.
@@ -16,7 +16,7 @@ For this development checkout:
 ```
 
 The native application is `build/windows-release/bin/Fission.exe`. For the
-portable package in `dist/0.5.0-alpha`, extract the complete `Fission-Alpha-Windows-x64.zip` and open
+portable package in `dist/0.6.0-alpha`, extract the complete `Fission-Alpha-Windows-x64.zip` and open
 `Fission/bin/Fission.exe`. Keep its companion folders together.
 
 Choose **New**, then **Create Sketch** and a plane. Sketch tools appear in the
@@ -31,6 +31,15 @@ navigate, and Shift extends selection between the panels and canvas. In these
 panels, Enter/F2/Delete retain their panel meaning even with custom shortcuts.
 Finish or cancel the active modeling task before editing history.
 The portable package includes an editable `examples/machined-plate.FCStd` design.
+
+**Move / Copy** previews translation in design X/Y/Z axes and rotation in
+X, then Y, then Z around each selected object's placement origin. **Cancel**
+restores the design; **OK** records one native Undo operation. **Create linked
+copies** keeps copies in the source component and preserves parametric source
+updates. Select components, bodies, links, or standalone solids/surfaces/meshes;
+move individual modeling features through their containing body. Assembly
+members use native dragging or joints. Move linked sources and dependent links
+in separate operations. See the [native Move / Copy dialog](docs/fission-move.png).
 
 Press **S** to search every registered tool by its name, native ID, or familiar CAD
 term. The toolbox displays readiness and current shortcut hints. **Up/Down** skip
@@ -74,7 +83,8 @@ components and creating solver-backed joints.
 .\scripts\test-gui.ps1 -CanvasOnly
 .\scripts\test-gui.ps1 -SearchOnly
 .\scripts\test-gui.ps1 -HistoryOnly
-.\scripts\package.ps1 -OutputDirectory dist\0.5.0-alpha
+.\scripts\test-gui.ps1 -MoveOnly
+.\scripts\package.ps1 -OutputDirectory dist\0.6.0-alpha
 ```
 
 Builds require Visual Studio C++ Build Tools and a Windows SDK. Setup downloads
@@ -85,9 +95,9 @@ See [build instructions](FISSION_BUILD.md), [shortcut mappings](FISSION_SHORTCUT
 [architecture](FISSION_ARCHITECTURE.md), and [status and limitations](FISSION_STATUS.md).
 This development release retains native feature panels and CAD semantics.
 Several Fusion commands and optional specialist modules remain partial.
-The October 5 portable build passed 41 GUI cases, restart persistence, 13 CAD
+The October 5 portable build passed 45 GUI cases, restart persistence, 13 CAD
 checks, and activation of nine native workbenches. The engine passed 26 native
-test suites; Fission's profile/history/marking/search and Qt suite passed 127 tests.
+test suites; Fission's profile/history/move/marking/search and Qt suite passed 156 tests.
 
 Fission is based on the FreeCAD open-source project. Source and dependency
 copyrights/licenses are preserved in [NOTICE.md](NOTICE.md), the matching source

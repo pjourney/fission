@@ -20,7 +20,7 @@ its command-line companion is `FissionCmd.exe`.
 checkout is stored in `upstream-src`. Applying Fission creates branch
 `codex/fission-engine` and retains the FreeCAD remote as `upstream`. Engine
 version 27.1 and its document compatibility rules are preserved; the Fission
-presentation has its own 0.5 Alpha label.
+presentation has its own 0.6 Alpha label.
 
 Requirements are Windows x64, Git, PowerShell, curl, a Windows SDK, and Visual
 Studio C++ Build Tools with CMake and Ninja. Allow at least 25 GB of free space
@@ -107,6 +107,9 @@ Repeat this validation when changing the patch; failed hunks are not ignored.
 # Target native search readiness, focus, Fillet tasks and Sketcher canvas input.
 .\scripts\test-gui.ps1 -SearchOnly -OutputDirectory test-output\search-focused
 
+# Target design-axis placement preview, links, Cancel/Undo/Redo and ownership.
+.\scripts\test-gui.ps1 -MoveOnly -OutputDirectory test-output\move-focused
+
 # Full upstream Python app suite, for a separate extended run.
 .\scripts\test-upstream.ps1 -SkipCpp -PythonSuite 0
 ```
@@ -145,18 +148,22 @@ codes, and restores its temporary environment. Integrated JSON reports, native
 logs, FCStd/STEP/STL files, and screenshots are saved in `test-output`.
 
 On October 5, 2026, the branded engine passed all 26 CTest executables. Both the
-build-tree run and the final installed portable run passed 41/41 native GUI
+build-tree run and the final installed portable run passed 45/45 native GUI
 cases, followed by passing persistence writer and reader processes. Primary
-delivery evidence is in `test-output/history-portable/smoke-results.json` and
-`test-output/history-portable/persistence-report.json`; the build-tree
-results are in `test-output/history-full`. The combined unit/Qt suite passed
-127 checks; `build/history-combined-tests.log` records that run. Search coverage
+delivery evidence is in `test-output/move-portable/smoke-results.json` and
+`test-output/move-portable/persistence-report.json`; the build-tree
+results are in `test-output/move-full`. The combined unit/Qt suite passed
+156 checks; `build/move-combined-tests.log` records that run. Search coverage
 includes actual native Fillet preview/Cancel/OK/Undo, Sketcher line clicks,
 selection readiness, closing documents, complete catalog and persisted recents.
 The integrated cases cover native feature preview/OK/Cancel/Undo, active component
 scoping, Browser/Timeline, Qt shortcuts, camera input, selected Drawing/CAM
 editors, Surface/Mesh geometry and files with live catalog checks, Assembly
 insert/Fixed/Revolute joints/solver/external links, and actual Stitch dialogs.
+Move / Copy coverage includes design-axis translation/rotation in nested frames,
+Cancel/no-op/one Undo, actual M/Ctrl+Z/Ctrl+Y, mesh placement, both native link
+modes and link-of-link vertices, source updates/FCStd reopen, selection dependency
+guards, and foreign/closed-document transaction ownership.
 The portable Assembly case records real before-change observer calls using
 the native derived view-provider binding, restores an inactive insertion task's
 solver panel, and survives native Cancel. Installed-runtime checks also passed
@@ -174,40 +181,40 @@ to presentation.
 
 ## Portable package and matching source
 
-The verified 0.5 runtime stage is identified by `runtimeDirectory` in
-`dist/0.5.0-alpha/package-manifest.json`. It passed native GUI/restart and
+The verified 0.6 runtime stage is identified by `runtimeDirectory` in
+`dist/0.6.0-alpha/package-manifest.json`. It passed native GUI/restart and
 installed-runtime checks, 13 geometry cases, and nine workbench activations.
 `verification/portable-gui-report.json`, `verification/cad/report.json`,
 `stage-manifest.json`, and `source-verification.json` retain installed-path,
 geometry, native-byte, and applied-source evidence. The package manifests record
 verified native paths, `lib` aliases, and matching engine/Fission source hashes.
-The earlier 0.1, 0.2, 0.3, and 0.4 deliveries are preserved outside
-`dist/0.5.0-alpha`.
+The earlier 0.1 through 0.5 deliveries are preserved outside
+`dist/0.6.0-alpha`.
 
 Use the following procedure to stage, verify, and generate the final archives:
 
 ```powershell
 # Stage native runtime, notices, and the matching applied source first.
-.\scripts\package.ps1 -StageOnly -OutputDirectory dist\0.5.0-alpha
+.\scripts\package.ps1 -StageOnly -OutputDirectory dist\0.6.0-alpha
 
 # Use the stage path printed above. This launches the staged native GUI too.
-.\scripts\test-portable.ps1 -RuntimeDirectory '.\dist\0.5.0-alpha\staging\<stage>\Fission'
+.\scripts\test-portable.ps1 -RuntimeDirectory '.\dist\0.6.0-alpha\staging\<stage>\Fission'
 
 # Repeat integrated GUI and independent settings restart checks in the stage.
-.\scripts\test-gui.ps1 -BuildDirectory '.\dist\0.5.0-alpha\staging\<stage>\Fission' -OutputDirectory test-output\history-portable -TimeoutSeconds 180
+.\scripts\test-gui.ps1 -BuildDirectory '.\dist\0.6.0-alpha\staging\<stage>\Fission' -OutputDirectory test-output\move-portable -TimeoutSeconds 180
 
 # Refresh UI/docs/source in that stage and create the final archives.
-.\scripts\package.ps1 -OutputDirectory dist\0.5.0-alpha -ReuseStageDirectory '.\dist\0.5.0-alpha\staging\<stage>'
+.\scripts\package.ps1 -OutputDirectory dist\0.6.0-alpha -ReuseStageDirectory '.\dist\0.6.0-alpha\staging\<stage>'
 ```
 
 The script runs the configured CMake install target into a fresh directory under
 `OutputDirectory/staging`, installs Fission UI files, includes root notices and dependency
 licenses/SBOM, and produces:
 
-- `dist/0.5.0-alpha/Fission-Alpha-Windows-x64.zip`, containing the complete portable runtime.
-- `dist/0.5.0-alpha/Fission-Alpha-source.zip`, containing the exact applied Fission/FreeCAD
+- `dist/0.6.0-alpha/Fission-Alpha-Windows-x64.zip`, containing the complete portable runtime.
+- `dist/0.6.0-alpha/Fission-Alpha-source.zip`, containing the exact applied Fission/FreeCAD
   source and recursive submodule files, patches, scripts, and notices.
-- `dist/0.5.0-alpha/package-manifest.json`, recording presentation version, source pin, patch hashes, executable
+- `dist/0.6.0-alpha/package-manifest.json`, recording presentation version, source pin, patch hashes, executable
   hash, archive hashes/sizes, and staging location.
 
 LibPack's generated installer contains absolute dependency destinations. Packaging
@@ -246,3 +253,12 @@ Its `SOURCE_ARCHIVE_README.txt` documents rebuilding that snapshot with dependen
 setup, `scripts/build.ps1`, and `scripts/install-ui.ps1`. A normal Git development
 checkout should use root `build.ps1` instead.
 
+## Publishing tested milestones
+
+Fetch the Fission `origin` remote and verify its main branch is an ancestor of the
+tested milestone before publishing. Integrate any intervening changes and rerun
+affected acceptance first. Push the milestone with `git push origin HEAD:refs/heads/main`
+and compare `git rev-parse HEAD` with `git ls-remote origin refs/heads/main`.
+Do not force push. The FreeCAD `upstream` remote remains read-only. Local `main`
+may advance by fast-forward after publication when it is not checked out elsewhere.
+The repository uses Git Credential Manager; credentials stay outside source and logs.

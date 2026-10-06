@@ -27,7 +27,7 @@ COMMANDS = {
     "CircPattern": ("Circular Pattern", "PartDesign_PolarPattern", "PartDesign_PolarPattern", "polar pattern", "model"),
     "Boolean": ("Combine", "PartDesign_Boolean", "PartDesign_Boolean", "boolean union cut intersect", "model"),
     "Plane": ("Construction Plane", "PartDesign_Plane", "PartDesign_Plane", "datum reference", "model"),
-    "Move": ("Move / Copy", None, "Std_Transform", "translate position transform duplicate", "model"),
+    "Move": ("Move / Copy", None, "Std_Transform", "translate rotate position transform duplicate linked copy", "model"),
     "Measure": ("Measure", "Std_Measure", "Std_Measure", "inspect distance angle", "all"),
     "Appearance": ("Appearance", "Std_SetAppearance", "Std_SetAppearance", "material color", "model"),
     "Visibility": ("Toggle Visibility", "Std_ToggleVisibility", "Std_ToggleVisibility", "show hide", "all"),
@@ -113,9 +113,12 @@ class FissionCommand:
             document = Gui.activeDocument()
             return bool(document and not document.getInEdit()
                         and not App.ActiveDocument.HasPendingTransaction and not Gui.Control.activeDialog())
-        if self.name in ("Move", "NewComponent") and App.ActiveDocument.HasPendingTransaction:
+        if self.name == "Move":
+            from .move import can_move
+            return can_move()
+        if self.name == "NewComponent" and App.ActiveDocument.HasPendingTransaction:
             return False
-        if self.name in ("Move", "EditFeature"):
+        if self.name == "EditFeature":
             return bool(Gui.Selection.getSelection()) and not Gui.Control.activeDialog()
         if self.name == "Stitch":
             doc = Gui.activeDocument()
